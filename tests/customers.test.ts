@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { customerFormSchema, emptyCustomerForm } from "@/modules/customers/customer.schema";
-import { createCustomer, CustomerError, deleteCustomer, updateCustomer } from "@/modules/customers/customer.service";
+import { createCustomer, CustomerError, deleteCustomer, DuplicatePhoneError, updateCustomer } from "@/modules/customers/customer.service";
 import { createTestCustomer, resetDb } from "./db";
 
 beforeEach(resetDb);
@@ -44,6 +44,25 @@ describe("cadastro de clientes", () => {
     const updated = await updateCustomer(c.id, { ...valid, consent: false, optedOut: true });
     expect(updated.consentAt).toBeNull();
     expect(updated.optedOutAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("telefone duplicado", () => {
+  it("não deixa cadastrar dois clientes com o mesmo telefone (em qualquer formato)", async () => {
+    await createCustomer({ ...valid, phone: "(21) 99876-5432" });
+    await expect(createCustomer({ ...valid, name: "Outro", phone: "+55 21 99876-5432" })).rejects.toBeInstanceOf(
+      DuplicatePhoneError,
+    );
+    expect(await prisma.customer.count()).toBe(1);
+  });
+
+  it("deixa editar o próprio cliente sem acusar duplicidade, mas não trocar para o telefone de outro", async () => {
+    const a = await createCustomer({ ...valid, phone: "(21) 99876-5432" });
+    const b = await createCustomer({ ...valid, name: "B", phone: "(21) 99876-0000" });
+    await expect(updateCustomer(a.id, { ...valid, name: "A editado", phone: "(21) 99876-5432" })).resolves.toBeTruthy();
+    await expect(updateCustomer(b.id, { ...valid, name: "B", phone: "(21) 99876-5432" })).rejects.toBeInstanceOf(
+      DuplicatePhoneError,
+    );
   });
 });
 

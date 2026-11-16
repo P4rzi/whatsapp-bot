@@ -57,14 +57,33 @@ function toData(values: CustomerFormValues, current?: { consentAt: Date | null; 
   };
 }
 
-export function createCustomer(values: CustomerFormValues) {
-  return prisma.customer.create({ data: toData(values) });
+/** Erro de telefone já cadastrado: o formulário mostra no campo e oferece abrir o cadastro existente. */
+export class DuplicatePhoneError extends CustomerError {
+  constructor(readonly existing: { id: string; name: string }) {
+    super(`Este telefone já está cadastrado para ${existing.name}.`);
+  }
+}
+
+async function assertPhoneAvailable(phone: string, exceptId?: string) {
+  const existing = await prisma.customer.findFirst({
+    where: { phone, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { id: true, name: true },
+  });
+  if (existing) throw new DuplicatePhoneError(existing);
+}
+
+export async function createCustomer(values: CustomerFormValues) {
+  const data = toData(values);
+  await assertPhoneAvailable(data.phone);
+  return prisma.customer.create({ data });
 }
 
 export async function updateCustomer(id: string, values: CustomerFormValues) {
   const current = await prisma.customer.findUnique({ where: { id }, select: { consentAt: true, optedOutAt: true } });
   if (!current) throw new CustomerError("Cliente não encontrado");
-  return prisma.customer.update({ where: { id }, data: toData(values, current) });
+  const data = toData(values, current);
+  await assertPhoneAvailable(data.phone, id);
+  return prisma.customer.update({ where: { id }, data });
 }
 
 /**

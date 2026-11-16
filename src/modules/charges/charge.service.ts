@@ -8,9 +8,20 @@ export class ChargeError extends Error {}
 
 export const CHARGE_PAGE_SIZE = 50;
 
-export async function listCharges(opts: { status?: ChargeStatus; page?: number }) {
+export async function listCharges(opts: { status?: ChargeStatus; page?: number; search?: string }) {
   const page = Math.max(1, opts.page ?? 1);
-  const where = opts.status ? { status: opts.status } : {};
+  const q = opts.search?.trim();
+  const where = {
+    ...(opts.status ? { status: opts.status } : {}),
+    ...(q
+      ? {
+          OR: [
+            { description: { contains: q, mode: "insensitive" as const } },
+            { customer: { name: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.charge.findMany({
       where,
@@ -50,8 +61,31 @@ async function toChargeData(values: ChargeFormValues) {
   };
 }
 
+/**
+ * Evita agendar duas vezes a mesma mensagem: mesmo cliente, mesmo horário e ainda ativa
+ * (agendada, enviando ou enviada). Protege contra clique duplo e cadastro repetido por engano.
+ */
+async function assertNotDuplicate(data: { customerId: string; scheduledAt: Date }, exceptId?: string) {
+  const existing = await prisma.charge.findFirst({
+    where: {
+      customerId: data.customerId,
+      scheduledAt: data.scheduledAt,
+      status: { in: ["PENDING", "PROCESSING", "SENT"] },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    select: { description: true },
+  });
+  if (existing) {
+    throw new ChargeError(
+      `Já existe uma cobrança para este cliente nesse mesmo horário ("${existing.description}"). Escolha outro horário ou edite a existente.`,
+    );
+  }
+}
+
 export async function createCharge(values: ChargeFormValues) {
-  return prisma.charge.create({ data: await toChargeData(values) });
+  const data = await toChargeData(values);
+  await assertNotDuplicate(data);
+  return prisma.charge.create({ data });
 }
 
 export function getCharge(id: string) {
@@ -64,6 +98,7 @@ export function getCharge(id: string) {
  */
 export async function updateCharge(id: string, values: ChargeFormValues) {
   const data = await toChargeData(values);
+  await assertNotDuplicate(data, id);
   const { count } = await prisma.charge.updateMany({
     where: { id, status: "PENDING" },
     // Novo horário/mensagem = novo ciclo: zera tentativas automáticas e espera.

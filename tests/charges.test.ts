@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { utcToLocalParts } from "@/lib/utils/datetime";
 import { chargeFormSchema, type ChargeFormValues } from "@/modules/charges/charge.schema";
-import { cancelCharge, ChargeError, createCharge, updateCharge } from "@/modules/charges/charge.service";
+import { cancelCharge, ChargeError, createCharge, listCharges, updateCharge } from "@/modules/charges/charge.service";
 import { createTestCustomer, resetDb } from "./db";
 
 beforeEach(resetDb);
@@ -118,8 +118,8 @@ describe("edição de cobranças", () => {
 
   it("não edita cobrança em envio, enviada ou cancelada", async () => {
     const c = await createTestCustomer();
-    for (const status of ["PROCESSING", "SENT", "CANCELLED"] as const) {
-      const ch = await createCharge(formFor(c.id));
+    for (const [i, status] of (["PROCESSING", "SENT", "CANCELLED"] as const).entries()) {
+      const ch = await createCharge(formFor(c.id, { date: "2030-07-0" + (i + 1), time: "09:00" }));
       await prisma.charge.update({ where: { id: ch.id }, data: { status } });
       await expect(updateCharge(ch.id, formFor(c.id, { description: "x" }))).rejects.toBeInstanceOf(ChargeError);
       expect((await prisma.charge.findUniqueOrThrow({ where: { id: ch.id } })).description).toBe("Mensalidade");
@@ -131,5 +131,45 @@ describe("edição de cobranças", () => {
     const noConsent = await createTestCustomer({ consent: false, phone: "5511900000003" });
     const ch = await createCharge(formFor(ok.id));
     await expect(updateCharge(ch.id, formFor(noConsent.id))).rejects.toBeInstanceOf(ChargeError);
+  });
+});
+
+describe("cobrança duplicada", () => {
+  it("não deixa agendar duas vezes para o mesmo cliente e horário", async () => {
+    const c = await createTestCustomer();
+    const form = formFor(c.id, { date: "2030-06-10", time: "10:00" });
+    await createCharge(form);
+    await expect(createCharge({ ...form, description: "Outra" })).rejects.toThrow(/mesmo horário/);
+    expect(await prisma.charge.count()).toBe(1);
+  });
+
+  it("permite o mesmo horário se a anterior foi cancelada, ou para outro cliente", async () => {
+    const c = await createTestCustomer();
+    const other = await createTestCustomer({ phone: "5511900000004" });
+    const form = formFor(c.id, { date: "2030-06-10", time: "10:00" });
+    const first = await createCharge(form);
+    await cancelCharge(first.id);
+    await expect(createCharge(form)).resolves.toBeTruthy();
+    await expect(createCharge({ ...form, customerId: other.id })).resolves.toBeTruthy();
+  });
+
+  it("editar a própria cobrança sem mudar o horário não acusa duplicidade", async () => {
+    const c = await createTestCustomer();
+    const form = formFor(c.id, { date: "2030-06-10", time: "10:00" });
+    const ch = await createCharge(form);
+    await expect(updateCharge(ch.id, { ...form, description: "Ajustada" })).resolves.toBeUndefined();
+  });
+});
+
+describe("busca de cobranças", () => {
+  it("encontra por nome do cliente ou descrição, sem diferenciar maiúsculas", async () => {
+    const maria = await createTestCustomer({ name: "Maria Souza" });
+    const joao = await createTestCustomer({ name: "João Lima", phone: "5511900000005" });
+    await createCharge(formFor(maria.id, { description: "Mensalidade março", date: "2030-03-01", time: "09:00" }));
+    await createCharge(formFor(joao.id, { description: "Aluguel", date: "2030-03-02", time: "09:00" }));
+    expect((await listCharges({ search: "maria" })).items.map((c) => c.customer.name)).toEqual(["Maria Souza"]);
+    expect((await listCharges({ search: "ALUGUEL" })).items.map((c) => c.description)).toEqual(["Aluguel"]);
+    expect((await listCharges({ search: "inexistente" })).total).toBe(0);
+    expect((await listCharges({ search: "" })).total).toBe(2);
   });
 });

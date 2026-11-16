@@ -1,5 +1,5 @@
 import { TZDate } from "@date-fns/tz";
-import { format } from "date-fns";
+import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // Datas são gravadas em UTC; toda entrada e exibição usa o fuso do negócio.
@@ -29,6 +29,14 @@ export function suggestedSchedule(now: Date = new Date()): { date: string; time:
   const d = new Date(now.getTime() + 90 * 60_000);
   d.setUTCMinutes(0, 0, 0);
   return utcToLocalParts(d);
+}
+
+/**
+ * Mesmo dia e horário (no fuso do negócio) N meses depois. Dias que não existem no mês de destino
+ * caem no último dia (31/01 -> 28/02).
+ */
+export function addMonthsInTz(date: Date, months: number, tz: string = APP_TIMEZONE): Date {
+  return new Date(addMonths(new TZDate(date.getTime(), tz), months).getTime());
 }
 
 /** Instante -> { date: "yyyy-MM-dd", time: "HH:mm" } no fuso do negócio (para preencher formulários). */

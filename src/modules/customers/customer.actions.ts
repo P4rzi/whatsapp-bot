@@ -7,11 +7,14 @@ import { toFieldErrors, type ActionResult } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { customerFormSchema, type CustomerFormValues } from "./customer.schema";
-import { createCustomer, CustomerError, deleteCustomer, updateCustomer } from "./customer.service";
+import { createCustomer, CustomerError, deleteCustomer, DuplicatePhoneError, updateCustomer } from "./customer.service";
 
 const idSchema = z.uuid();
 
 function fail(err: unknown, fallback: string): ActionResult {
+  if (err instanceof DuplicatePhoneError) {
+    return { ok: false, message: err.message, fieldErrors: { phone: err.message } };
+  }
   if (err instanceof CustomerError) return { ok: false, message: err.message };
   logger.error({ err }, fallback);
   return { ok: false, message: fallback };

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { CancelChargeButton } from "@/components/charges/cancel-charge-button";
 import { CHARGE_STATUS_LABEL, ChargeStatusBadge } from "@/components/charges/charge-status-badge";
 import { RetryChargeButton } from "@/components/charges/retry-charge-button";
 import { PageHeader } from "@/components/layout/page-header";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChargeStatus } from "@/generated/prisma/enums";
@@ -28,11 +29,13 @@ export default async function ChargesPage({ searchParams }: PageProps<"/cobranca
   const sp = await searchParams;
   const status = Object.values(ChargeStatus).find((s) => s === sp.status);
   const page = Number(typeof sp.page === "string" ? sp.page : 1) || 1;
-  const { items, total, pages } = await listCharges({ status, page });
+  const search = typeof sp.q === "string" ? sp.q.slice(0, 100) : "";
+  const { items, total, pages } = await listCharges({ status, page, search });
 
   const href = (p: { status?: string; page?: number }) => {
     const params = new URLSearchParams();
     if (p.status) params.set("status", p.status);
+    if (search) params.set("q", search);
     if (p.page && p.page > 1) params.set("page", String(p.page));
     const qs = params.toString();
     return qs ? `/cobrancas?${qs}` : "/cobrancas";
@@ -50,6 +53,14 @@ export default async function ChargesPage({ searchParams }: PageProps<"/cobranca
           </Link>
         }
       />
+
+      <form className="mb-3 flex max-w-md gap-2" role="search">
+        {status && <input type="hidden" name="status" value={status} />}
+        <Input name="q" defaultValue={search} placeholder="Buscar por cliente ou descrição" aria-label="Buscar cobranças" />
+        <Button type="submit" variant="outline" size="icon" aria-label="Buscar">
+          <Search />
+        </Button>
+      </form>
 
       <nav className="mb-4 flex flex-wrap gap-1.5" aria-label="Filtrar por status">
         {FILTERS.map((f) => (
@@ -80,7 +91,7 @@ export default async function ChargesPage({ searchParams }: PageProps<"/cobranca
             {items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                  Nenhuma cobrança {status ? "com este status" : "cadastrada ainda"}.
+                  {search ? "Nenhuma cobrança encontrada para essa busca." : `Nenhuma cobrança ${status ? "com este status" : "cadastrada ainda"}.`}
                 </TableCell>
               </TableRow>
             )}
@@ -121,6 +132,15 @@ export default async function ChargesPage({ searchParams }: PageProps<"/cobranca
                       chargeId={ch.id}
                       label={`${ch.customer.name} — ${ch.description}, ${formatInTz(ch.scheduledAt)}`}
                     />
+                  )}
+                  {ch.status !== "PENDING" && ch.status !== "PROCESSING" && (
+                    <Link
+                      href={`/cobrancas/nova?copiarDe=${ch.id}`}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
+                      title="Criar uma cópia para o próximo mês"
+                    >
+                      Repetir
+                    </Link>
                   )}
                   {ch.status === "FAILED" && (
                     <RetryChargeButton
