@@ -1,0 +1,207 @@
+// Schema do sistema de cobranças via WhatsApp.
+// Todas as datas são gravadas em UTC (timestamptz); a interface converte para America/Sao_Paulo.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Usuário administrador
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// ---------------------------------------------------------------------------
+// Clientes que recebem cobranças
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String
+  /// Somente dígitos, com DDI (ex.: 5511987654321).
+  phone         String
+  notes         String?   @db.Text
+  isActive      Boolean   @default(true)
+  /// LGPD: quando e como o cliente consentiu em receber mensagens. Sem consentimento, nada é enviado.
+  consentAt     DateTime? @db.Timestamptz(3)
+  consentSource String?
+  /// LGPD: descadastro. Preenchido = não enviar mais nada.
+  optedOutAt    DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  charges Charge[]
+
+  @@index([phone])
+  @@index([name])
+}
+
+// ---------------------------------------------------------------------------
+// Cobranças agendadas (a própria tabela funciona como fila)
+// ---------------------------------------------------------------------------
+
+enum ChargeStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model Charge {
+  id            String       @id @default(uuid()) @db.Uuid
+  customerId    String       @db.Uuid
+  description   String
+  amount        Decimal?     @db.Decimal(12, 2)
+  /// Modelo da mensagem, com variáveis {{nome}}, {{valor}}, {{descricao}}, {{data}}.
+  message       String       @db.Text
+  scheduledAt   DateTime     @db.Timestamptz(3)
+  status        ChargeStatus @default(PENDING)
+  sentAt        DateTime?    @db.Timestamptz(3)
+  cancelledAt   DateTime?    @db.Timestamptz(3)
+  /// Controle da fila.
+  attemptCount  Int          @default(0)
+  /// Próxima tentativa permitida (backoff). Nulo = usar scheduledAt.
+  nextAttemptAt DateTime?    @db.Timestamptz(3)
+  lockedAt      DateTime?    @db.Timestamptz(3)
+  lockedBy      String?
+  /// Último erro resumido, para exibição rápida.
+  lastError     String?      @db.Text
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  customer Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  attempts MessageAttempt[]
+
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([customerId])
+  @@index([status, scheduledAt])
+}
+
+// ---------------------------------------------------------------------------
+// Tentativas de envio (histórico)
+// ---------------------------------------------------------------------------
+
+enum AttemptStatus {
+  /// Registrada antes de chamar o WhatsApp; se o worker cair aqui, o resultado é desconhecido.
+  STARTED
+  SUCCESS
+  FAILED
+  /// Timeout ou queda durante o envio: a mensagem pode ou não ter saído. Nunca é reenviada sozinha.
+  UNKNOWN
+}
+
+model MessageAttempt {
+  id                String        @id @default(uuid()) @db.Uuid
+  chargeId          String        @db.Uuid
+  attemptNumber     Int
+  status            AttemptStatus
+  /// Mensagem final já com as variáveis preenchidas.
+  renderedMessage   String?       @db.Text
+  errorMessage      String?       @db.Text
+  providerMessageId String?
+  attemptedAt       DateTime      @default(now()) @db.Timestamptz(3)
+  finishedAt        DateTime?     @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+
+  charge Charge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+
+  @@unique([chargeId, attemptNumber])
+  @@index([chargeId])
+  @@index([attemptedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Estado operacional da conexão WhatsApp (sem credenciais)
+// ---------------------------------------------------------------------------
+
+enum WhatsAppStatus {
+  DISCONNECTED
+  CONNECTING
+  QR_CODE_REQUIRED
+  CONNECTED
+  RECONNECTING
+  ERROR
+}
+
+model WhatsAppConnection {
+  id                 String         @id @default(uuid()) @db.Uuid
+  /// Identificador lógico da instância (hoje sempre "default"); permite várias no futuro.
+  instance           String         @unique @default("default")
+  status             WhatsAppStatus @default(DISCONNECTED)
+  phoneNumber        String?
+  /// QR temporário (texto bruto do Baileys). Apagado assim que conecta.
+  qrCode             String?        @db.Text
+  qrUpdatedAt        DateTime?      @db.Timestamptz(3)
+  lastConnectedAt    DateTime?      @db.Timestamptz(3)
+  lastDisconnectedAt DateTime?      @db.Timestamptz(3)
+  lastError          String?        @db.Text
+  updatedAt          DateTime       @updatedAt @db.Timestamptz(3)
+}
+
+// ---------------------------------------------------------------------------
+// Comandos do painel para o worker
+// ---------------------------------------------------------------------------
+
+enum SystemCommandType {
+  CONNECT_WHATSAPP
+  DISCONNECT_WHATSAPP
+  RESTART_WHATSAPP
+}
+
+enum SystemCommandStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model SystemCommand {
+  id          String              @id @default(uuid()) @db.Uuid
+  type        SystemCommandType
+  payload     Json?
+  status      SystemCommandStatus @default(PENDING)
+  error       String?             @db.Text
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  processedAt DateTime?           @db.Timestamptz(3)
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Batimento do worker (health check real, não só "processo vivo")
+// ---------------------------------------------------------------------------
+
+model WorkerHeartbeat {
+  id          String   @id @default("worker")
+  instanceId  String
+  startedAt   DateTime @db.Timestamptz(3)
+  lastCycleAt DateTime @db.Timestamptz(3)
+  /// Duração do último ciclo de processamento, em ms.
+  lastCycleMs Int      @default(0)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// ---------------------------------------------------------------------------
+// Configurações gerais (linha única)
+// ---------------------------------------------------------------------------
+
+model Settings {
+  id                     String   @id @default("default")
+  defaultMessageTemplate String   @db.Text
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+}
