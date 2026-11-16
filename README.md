@@ -1,45 +1,76 @@
 # Cobranças automatizadas via WhatsApp
 
-Painel web para cadastrar clientes e agendar mensagens de cobrança, com um worker
-que envia as mensagens pelo WhatsApp (Baileys) na data e hora configuradas.
+Painel web para cadastrar clientes e agendar mensagens de cobrança, com um serviço de envio (worker)
+que manda as mensagens pelo WhatsApp na data e hora configuradas.
 
-> Integração não oficial com o WhatsApp: pode ficar instável e não há garantia de entrega.
+> Integração não oficial com o WhatsApp (Baileys): pode ficar instável e não há garantia de entrega.
+
+- **Instalação e deploy no Railway:** [docs/DEPLOY.md](docs/DEPLOY.md)
+- **Uso e manutenção do dia a dia:** [docs/OPERACAO.md](docs/OPERACAO.md)
 
 ## Arquitetura
 
-Um repositório, dois processos:
+Um repositório (monólito modular), dois processos:
 
 | Processo | Comando | Responsável por |
 |---|---|---|
-| Web | `npm run start:web` | Painel (Next.js), login, clientes, cobranças, histórico, QR Code |
-| Worker | `npm run start:worker` | Conexão WhatsApp, fila de envio, reconexão, registro de resultados |
+| Web | `npm run start:web` | Painel (Next.js), login, clientes, cobranças, histórico, configurações, QR Code |
+| Worker | `npm run start:worker` | Conexão WhatsApp, reconexão, fila de envio, tentativas, histórico, retenção |
 
-Os dois se comunicam só pelo PostgreSQL (tabelas `SystemCommand`, `WhatsAppConnection`,
-`WorkerHeartbeat`). As credenciais do WhatsApp ficam criptografadas no volume do worker.
+Os dois se comunicam **só pelo PostgreSQL**:
+
+- `SystemCommand`: o painel pede conectar/desconectar/reconectar; o worker executa.
+- `WhatsAppConnection`: o worker publica o status e o QR Code temporário; o painel lê.
+- `Charge` + `MessageAttempt`: a fila de envio e o histórico.
+- `WorkerHeartbeat`: o worker registra cada ciclo; os health checks usam isso.
+
+A sessão do WhatsApp fica **criptografada** (AES-256-GCM) no volume do worker, nunca no banco.
+
+### Pastas principais
+
+```
+src/
+├── app/            páginas (login, dashboard, clientes, cobranças, histórico, whatsapp, configurações) e APIs
+├── components/     componentes de interface (shadcn/ui)
+├── modules/        regras de negócio por domínio (customers, charges, messaging, whatsapp, settings, ...)
+├── lib/            prisma, autenticação, env, logger, criptografia, utilitários (telefone, valor, fuso)
+└── worker/         processo de envio: index, scheduler, queue, processors/, whatsapp/ (Baileys, sessão, conexão)
+prisma/             schema e migrações
+tests/              testes de integração (banco em schema separado) 
+docs/               deploy e operação
+```
 
 ## Desenvolvimento
 
-Requisitos: Node 24.
+Requisitos: Node 24 e um PostgreSQL (ex.: um banco de desenvolvimento no Railway).
 
 ```bash
 npm install
-cp .env.example .env   # preencha DATABASE_URL, AUTH_SECRET e ENCRYPTION_KEY
-npm run db:migrate:dev
-npm run dev            # painel em http://localhost:3000
-npm run dev:worker     # worker em outro terminal
+cp .env.example .env     # preencha DATABASE_URL, AUTH_SECRET e ENCRYPTION_KEY
+npm run db:migrate:dev   # cria as tabelas
+npm run admin:create     # cria o admin (ADMIN_EMAIL, ADMIN_NAME, ADMIN_PASSWORD no .env)
+npm run dev              # painel em http://localhost:3000
+npm run dev:worker       # worker, em outro terminal
 ```
 
 ## Scripts
 
 | Script | O que faz |
 |---|---|
-| `dev` / `dev:worker` | Painel e worker em modo desenvolvimento |
+| `dev` / `dev:worker` | Painel e worker em desenvolvimento |
 | `build` | Gera o cliente Prisma, compila o Next e empacota o worker |
 | `start:web` / `start:worker` | Produção |
 | `db:migrate` | Aplica migrações (produção; roda no Pre-deploy do Railway) |
 | `db:migrate:dev` | Cria/aplica migrações em desenvolvimento |
 | `db:generate` | Gera o cliente Prisma |
+| `admin:create` / `admin:create:prod` | Cria o administrador ou redefine a senha |
 | `typecheck` / `lint` / `test` | Verificações |
+
+## Testes
+
+`npm test` roda testes unitários e de integração. Os de integração usam o banco do `DATABASE_URL`
+num **schema separado** (`vitest`), recriado a cada execução: os dados do painel não são tocados.
+O WhatsApp é simulado (`MockWhatsAppProvider`): nenhum número real é necessário.
 
 ## Health checks
 

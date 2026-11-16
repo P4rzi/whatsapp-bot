@@ -29,6 +29,15 @@ const REDACT_PATHS = [
   "*.authorization",
   "cookie",
   "*.cookie",
+  // Identificadores do WhatsApp (contêm o número de telefone) em logs internos do Baileys.
+  "jid",
+  "*.jid",
+  "remoteJid",
+  "*.remoteJid",
+  "participant",
+  "*.participant",
+  "recipient",
+  "*.recipient",
 ];
 
 export const logger = pino({

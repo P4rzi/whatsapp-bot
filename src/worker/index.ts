@@ -38,15 +38,17 @@ async function heartbeat(cycleMs = 0) {
   });
 }
 
+/** Execuções em andamento: o desligamento espera por elas (ex.: um envio no meio). */
+const inFlight = new Set<Promise<void>>();
+
 /** Executa fn a cada intervalMs, sem sobrepor execuções e sem derrubar o processo em caso de erro. */
 function every(intervalMs: number, name: string, fn: () => Promise<void>) {
   const tick = async () => {
     if (stopping) return;
-    try {
-      await fn();
-    } catch (err) {
-      logger.error({ err, task: name }, "falha em tarefa periódica");
-    }
+    const run = fn().catch((err) => logger.error({ err, task: name }, "falha em tarefa periódica"));
+    inFlight.add(run);
+    await run;
+    inFlight.delete(run);
     if (!stopping) timers.push(setTimeout(tick, intervalMs));
   };
   void tick();
@@ -109,9 +111,14 @@ async function shutdown(signal: string) {
   logger.info({ signal }, "encerrando worker");
   for (const t of timers) clearTimeout(t);
   // Limite de segurança: o Railway mata o processo se demorar demais.
-  const force = setTimeout(() => process.exit(1), 10_000);
+  const force = setTimeout(() => process.exit(1), 15_000);
   force.unref();
   try {
+    // Deixa o envio em andamento terminar (o ciclo para de pegar novas cobranças ao ver "stopping").
+    if (inFlight.size > 0) {
+      logger.info({ tasks: inFlight.size }, "aguardando tarefas em andamento");
+      await Promise.race([Promise.allSettled([...inFlight]), new Promise((r) => setTimeout(r, 10_000))]);
+    }
     await manager?.shutdown();
     await releaseLock?.();
     await prisma.$disconnect();

@@ -3,7 +3,7 @@ import { hash, verify } from "@node-rs/argon2";
 // Senhas com Argon2id (padrão da biblioteca), parâmetros recomendados pela OWASP.
 const OPTIONS = { memoryCost: 19456, timeCost: 2, parallelism: 1 } as const;
 
-export const PASSWORD_MIN_LENGTH = 10;
+export { PASSWORD_MIN_LENGTH } from "./password-policy";
 
 export function hashPassword(password: string): Promise<string> {
   return hash(password, OPTIONS);
