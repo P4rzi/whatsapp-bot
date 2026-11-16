@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
+// Cache Components fica desligado: o painel é todo dinâmico (sessão + banco em toda página),
+// então o modelo clássico (renderização sob demanda) é mais simples e previsível.
 const nextConfig: NextConfig = {
-  cacheComponents: true,
-  partialPrefetching: true,
   poweredByHeader: false,
   // Pacotes nativos/Node que não devem ser empacotados pelo bundler.
   serverExternalPackages: ["@node-rs/argon2", "pino", "pg"],

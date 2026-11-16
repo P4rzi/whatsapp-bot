@@ -15,7 +15,9 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "admin:create": "tsx --env-file-if-exists=.env src/scripts/create-admin.ts",
+    "admin:create:prod": "node dist/scripts/create-admin.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

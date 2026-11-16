@@ -7,8 +7,12 @@ import path from "node:path";
 const root = path.resolve(import.meta.dirname, "..");
 
 await build({
-  entryPoints: [path.join(root, "src/worker/index.ts")],
-  outfile: path.join(root, "dist/worker/index.mjs"),
+  entryPoints: {
+    "worker/index": path.join(root, "src/worker/index.ts"),
+    "scripts/create-admin": path.join(root, "src/scripts/create-admin.ts"),
+  },
+  outdir: path.join(root, "dist"),
+  outExtension: { ".js": ".mjs" },
   bundle: true,
   platform: "node",
   target: "node24",
