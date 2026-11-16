@@ -24,7 +24,7 @@ Os dois conversam só pelo banco. **Somente o worker** tem o volume com a sessã
 ### 1. Projeto e banco
 
 1. No Railway, crie um projeto (ou use o existente) e adicione **Database → PostgreSQL**.
-2. No serviço Postgres, aba **Backups**: ative os agendamentos **Daily** e **Weekly** (veja [Backups](#backups)).
+2. Backups: veja [Backups](#backups) (os automáticos do Railway exigem o plano Pro).
 
 ### 2. Serviço web
 
@@ -47,24 +47,21 @@ A porta é a que o Railway fornece na variável `PORT`; o `next start` já usa e
    - **Custom Start Command:** `npm run start:worker`
    - **Pre-deploy Command:** `npm run db:migrate` (ver [Migrações](#migrações))
    - **Healthcheck Path:** deixe vazio (o worker não tem HTTP; a saúde dele é medida pelo web)
-   - **Restart Policy:** Always
+   - **Restart Policy:** On Failure (reinicia sempre que o processo cai com erro; o worker só sai sozinho em caso de erro)
    - **Replicas:** 1
 3. **Não** gere domínio público para o worker.
-4. **Volume:** clique com o botão direito no serviço → **Attach Volume** → mount path **`/app/data`**.
+4. **Volume:** **+ Add → Volume →** escolha o serviço `worker` → mount path **`/app/data`**.
 5. **Variables:** `DATABASE_URL`, `ENCRYPTION_KEY`, `WHATSAPP_SESSION_PATH=/app/data/whatsapp-session`,
    `NODE_ENV=production` e, se quiser ajustar, as demais `WORKER_*`/`MESSAGE_*`.
 
 ### 4. Administrador
 
 Depois do primeiro deploy do web, crie o usuário administrador **dentro do container do web**
-(ele já tem acesso ao banco pela rede privada). Com o [Railway CLI](https://docs.railway.com/guides/cli)
-instalado e logado (`railway login`, `railway link`):
+(ele já tem acesso ao banco pela rede privada): abra o serviço **web → aba Console** no painel do
+Railway (em tela de computador; a versão de celular não mostra o terminal). Alternativa: Railway CLI
+com `railway ssh --service web`.
 
-```bash
-railway ssh --service web
-```
-
-E, no terminal que abrir:
+No terminal (prompt `root@...:/app#`):
 
 ```bash
 ADMIN_EMAIL=voce@exemplo.com ADMIN_NAME="Seu Nome" ADMIN_PASSWORD="uma frase longa e secreta" npm run admin:create:prod
@@ -135,14 +132,18 @@ Cada push na branch `main` dispara o deploy dos dois serviços. Observações:
 
 ### Banco (essencial)
 
-No serviço **Postgres → Backups**:
+> **Atenção (verificado em 16/11/2026):** os backups automáticos do Railway (aba **Postgres → Backups**)
+> exigem o plano **Pro**. No Hobby, a aba só permite ver e restaurar backups já existentes.
+> **Decisão pendente** entre: (1) um serviço agendado (cron) que roda `pg_dump` todo dia e guarda o
+> arquivo num Bucket do Railway; (2) o mesmo, guardando no Cloudflare R2 / Backblaze B2; (3) plano Pro.
+> Até a decisão, faça a cópia manual abaixo antes de cadastrar dados reais e, depois, pelo menos semanalmente.
 
-1. Ative **Daily** (mantido 6 dias) e **Weekly** (mantido ~1 mês).
-2. Antes de mudanças grandes, crie um backup manual (**Backup now**).
+No plano Pro: em **Postgres → Backups**, ative **Daily** (mantido 6 dias) e **Weekly** (mantido ~1 mês)
+e crie um backup manual (**Backup now**) antes de mudanças grandes. Restaurar pelo Railway cria um
+volume novo a partir do backup e pede um deploy do Postgres (**Backups → Restore**).
 
-Restaurar pelo Railway cria um volume novo a partir do backup e pede um deploy do Postgres
-(**Backups → Restore**). Os backups ficam no mesmo projeto: por isso, faça também uma **cópia externa**
-mensal:
+Em qualquer plano, faça também uma **cópia externa** (exige habilitar temporariamente o acesso público
+do Postgres para obter a `DATABASE_PUBLIC_URL`, ou usar `railway connect Postgres`):
 
 ```bash
 pg_dump "$DATABASE_PUBLIC_URL" --format=custom --no-owner --file=backup-AAAA-MM-DD.dump
