@@ -25,7 +25,8 @@ export async function listCharges(opts: { status?: ChargeStatus; page?: number }
   return { items, total, page, pages: Math.max(1, Math.ceil(total / CHARGE_PAGE_SIZE)) };
 }
 
-export async function createCharge(values: ChargeFormValues) {
+/** Valida o formulário e o cliente (ativo, autorizado, não descadastrado) e devolve os dados da cobrança. */
+async function toChargeData(values: ChargeFormValues) {
   const scheduledAt = localToUtc(values.date, values.time);
   if (!scheduledAt) throw new ChargeError("Data ou horário inválido");
 
@@ -40,15 +41,37 @@ export async function createCharge(values: ChargeFormValues) {
     throw new ChargeError("Registre a autorização do cliente (LGPD) no cadastro dele antes de agendar cobranças.");
   }
 
-  return prisma.charge.create({
-    data: {
-      customerId: values.customerId,
-      description: values.description,
-      amount: parseMoney(values.amount),
-      message: values.message,
-      scheduledAt,
-    },
+  return {
+    customerId: values.customerId,
+    description: values.description,
+    amount: parseMoney(values.amount),
+    message: values.message,
+    scheduledAt,
+  };
+}
+
+export async function createCharge(values: ChargeFormValues) {
+  return prisma.charge.create({ data: await toChargeData(values) });
+}
+
+export function getCharge(id: string) {
+  return prisma.charge.findUnique({ where: { id }, include: { customer: { select: { id: true, name: true } } } });
+}
+
+/**
+ * Edita uma cobrança ainda agendada. A condição status=PENDING no UPDATE impede editar uma
+ * cobrança que o worker acabou de reservar para envio.
+ */
+export async function updateCharge(id: string, values: ChargeFormValues) {
+  const data = await toChargeData(values);
+  const { count } = await prisma.charge.updateMany({
+    where: { id, status: "PENDING" },
+    // Novo horário/mensagem = novo ciclo: zera tentativas automáticas e espera.
+    data: { ...data, attemptCount: 0, nextAttemptAt: null, lastError: null },
   });
+  if (count === 0) {
+    throw new ChargeError("Só é possível editar cobranças agendadas que ainda não começaram a ser enviadas.");
+  }
 }
 
 /**

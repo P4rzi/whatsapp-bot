@@ -23,8 +23,12 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
   /** O que start() faz: emitir QR (sem sessão) ou abrir direto (com sessão). */
   autoOpenOnStart = true;
 
-  constructor(opts: { hasSession?: boolean } = {}) {
+  /** Modo desenvolvimento: "lê" o QR sozinho depois de alguns ms (permite testar o painel ponta a ponta). */
+  private autoScanAfterMs: number | null;
+
+  constructor(opts: { hasSession?: boolean; autoScanAfterMs?: number } = {}) {
     this.session = !!opts.hasSession;
+    this.autoScanAfterMs = opts.autoScanAfterMs ?? null;
   }
 
   on<E extends keyof ProviderEvents>(event: E, handler: ProviderEvents[E]) {
@@ -35,7 +39,10 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
     this.startCalls++;
     if (!this.autoOpenOnStart) return;
     if (this.session) this.simulateOpen();
-    else this.simulateQr("QR-FAKE-" + this.startCalls);
+    else {
+      this.simulateQr("QR-FAKE-" + this.startCalls);
+      if (this.autoScanAfterMs !== null) setTimeout(() => this.simulateOpen(), this.autoScanAfterMs).unref?.();
+    }
   }
   async stop() {
     this.stopCalls++;

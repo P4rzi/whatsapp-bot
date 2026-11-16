@@ -6,6 +6,8 @@ import { createLogger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { expireStaleCommands } from "@/modules/whatsapp/command.repository";
 import { prismaConnectionStore } from "@/modules/whatsapp/connection.repository";
+import { MockWhatsAppProvider } from "@/modules/whatsapp/mock-provider";
+import type { WhatsAppProvider } from "@/modules/whatsapp/provider";
 import { processCommands } from "./commands";
 import { recoverStuckCharges } from "./queue";
 import { runRetention, runSchedulerCycle } from "./scheduler";
@@ -69,7 +71,13 @@ async function main() {
   const stale = await expireStaleCommands();
   if (stale.interrupted || stale.expired) logger.warn(stale, "comandos antigos descartados");
 
-  const provider = new BaileysProvider(sessionPath, parseKey(env.ENCRYPTION_KEY), logger);
+  // WHATSAPP_PROVIDER=mock (só fora de produção): simula o WhatsApp para testar o sistema
+  // ponta a ponta sem número real. O QR é "lido" sozinho após 5 s e nada é enviado de verdade.
+  const provider: WhatsAppProvider =
+    env.WHATSAPP_PROVIDER === "mock"
+      ? new MockWhatsAppProvider({ autoScanAfterMs: 5_000 })
+      : new BaileysProvider(sessionPath, parseKey(env.ENCRYPTION_KEY), logger);
+  if (env.WHATSAPP_PROVIDER === "mock") logger.warn("MODO SIMULADO: nenhuma mensagem será enviada de verdade");
   manager = new ConnectionManager(provider, prismaConnectionStore, logger);
   await manager.init();
 
@@ -95,6 +103,7 @@ async function main() {
         maxAttempts: env.MESSAGE_MAX_ATTEMPTS,
         sendTimeoutMs: env.MESSAGE_SEND_TIMEOUT_MS,
         minIntervalMs: env.MESSAGE_MIN_INTERVAL_MS,
+        maxDelayMs: env.MESSAGE_MAX_DELAY_HOURS * 3_600_000,
         shouldStop: () => stopping,
       });
     } finally {

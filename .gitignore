@@ -46,3 +46,7 @@ next-env.d.ts
 /data
 /src/generated
 /.claude/
+
+# backups locais (contêm dados pessoais)
+/backups
+*.cbk

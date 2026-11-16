@@ -310,3 +310,44 @@ describe("reenvio manual e retenção", () => {
     expect(left.map((a) => a.attemptNumber)).toEqual([2]);
   });
 });
+
+describe("cobranças muito atrasadas", () => {
+  it("não envia sozinha cobrança que passou do atraso máximo", async () => {
+    const c = await createTestCustomer();
+    const ch = await createCharge(c.id, { minutesFromNow: -5 * 24 * 60 }); // 5 dias atrás
+    await runSchedulerCycle(deps({ maxDelayMs: 72 * 3_600_000 }));
+    const after = await get(ch.id);
+    expect(after.status).toBe("FAILED");
+    expect(after.lastError).toMatch(/passou mais de 72h/);
+    expect(provider.sent).toHaveLength(0);
+  });
+
+  it("envia normalmente se estiver dentro do limite", async () => {
+    const c = await createTestCustomer();
+    const ch = await createCharge(c.id, { minutesFromNow: -60 });
+    await runSchedulerCycle(deps({ maxDelayMs: 72 * 3_600_000 }));
+    expect((await get(ch.id)).status).toBe("SENT");
+  });
+
+  it("reenvio manual de uma cobrança atrasada é enviado (a referência passa a ser o reenvio)", async () => {
+    const c = await createTestCustomer();
+    const ch = await createCharge(c.id, { minutesFromNow: -5 * 24 * 60 });
+    await runSchedulerCycle(deps({ maxDelayMs: 72 * 3_600_000 }));
+    await retryCharge(ch.id);
+    await runSchedulerCycle(deps({ maxDelayMs: 72 * 3_600_000 }));
+    expect((await get(ch.id)).status).toBe("SENT");
+  });
+});
+
+describe("provedor simulado (modo desenvolvimento)", () => {
+  it("gera QR e conecta sozinho depois do tempo configurado", async () => {
+    const dev = new MockWhatsAppProvider({ autoScanAfterMs: 20 });
+    const events: string[] = [];
+    dev.on("qr", () => events.push("qr"));
+    dev.on("open", () => events.push("open"));
+    await dev.start();
+    await new Promise((r) => setTimeout(r, 60));
+    expect(events).toEqual(["qr", "open"]);
+    expect(dev.isConnected()).toBe(true);
+  });
+});

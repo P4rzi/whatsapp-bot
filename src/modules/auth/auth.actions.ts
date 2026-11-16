@@ -10,9 +10,12 @@ import { createRateLimiter } from "@/lib/rate-limit";
 import type { ActionResult } from "@/lib/action-result";
 import { loginSchema, type LoginInput } from "./auth.schema";
 
-// 5 tentativas erradas por IP+e-mail a cada 15 minutos; 20 por IP.
-const byAccount = createRateLimiter({ limit: 5, windowMs: 15 * 60_000 });
-const byIp = createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
+// Limites de senha errada a cada 15 minutos:
+// - por e-mail (independe do IP): o cabeçalho de IP pode ser forjado pelo cliente, então o limite
+//   que protege a conta não pode depender dele;
+// - por IP: barra quem testa muitos e-mails diferentes a partir do mesmo endereço.
+const byAccount = createRateLimiter({ limit: 10, windowMs: 15 * 60_000 });
+const byIp = createRateLimiter({ limit: 30, windowMs: 15 * 60_000 });
 
 async function clientIp(): Promise<string> {
   const h = await headers();
@@ -25,7 +28,7 @@ export async function loginAction(input: LoginInput): Promise<ActionResult> {
   const { email, password } = parsed.data;
 
   const ip = await clientIp();
-  const accountKey = `${ip}:${email}`;
+  const accountKey = `email:${email}`;
   const wait = Math.max(byAccount.check(accountKey), byIp.check(ip));
   if (wait > 0) {
     return { ok: false, message: `Muitas tentativas. Tente novamente em ${Math.ceil(wait / 60)} min.` };

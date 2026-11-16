@@ -112,6 +112,11 @@ export default async function ChargesPage({ searchParams }: PageProps<"/cobranca
                 </TableCell>
                 <TableCell className="text-right">
                   {ch.status === "PENDING" && (
+                    <Link href={`/cobrancas/${ch.id}/editar`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      Editar
+                    </Link>
+                  )}
+                  {ch.status === "PENDING" && (
                     <CancelChargeButton
                       chargeId={ch.id}
                       label={`${ch.customer.name} — ${ch.description}, ${formatInTz(ch.scheduledAt)}`}

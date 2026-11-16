@@ -7,7 +7,7 @@ import { toFieldErrors, type ActionResult } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { chargeFormSchema, type ChargeFormValues } from "./charge.schema";
-import { cancelCharge, ChargeError, createCharge, retryCharge } from "./charge.service";
+import { cancelCharge, ChargeError, createCharge, retryCharge, updateCharge } from "./charge.service";
 
 function fail(err: unknown, fallback: string): ActionResult {
   if (err instanceof ChargeError) return { ok: false, message: err.message };
@@ -26,6 +26,22 @@ export async function createChargeAction(values: ChargeFormValues): Promise<Acti
     logger.info({ event: "charge_created", chargeId: charge.id, scheduledAt: charge.scheduledAt }, "cobrança agendada");
   } catch (err) {
     return fail(err, "Não foi possível agendar a cobrança.");
+  }
+  redirect("/cobrancas?status=PENDING");
+}
+
+export async function updateChargeAction(id: string, values: ChargeFormValues): Promise<ActionResult> {
+  await requireUser();
+  if (!z.uuid().safeParse(id).success) return { ok: false, message: "Cobrança inválida." };
+  const parsed = chargeFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, message: "Verifique os campos.", fieldErrors: toFieldErrors(parsed.error.issues) };
+  }
+  try {
+    await updateCharge(id, parsed.data);
+    logger.info({ event: "charge_updated", chargeId: id }, "cobrança editada");
+  } catch (err) {
+    return fail(err, "Não foi possível salvar a cobrança.");
   }
   redirect("/cobrancas?status=PENDING");
 }

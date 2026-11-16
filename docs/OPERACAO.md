@@ -9,7 +9,7 @@ Como usar e manter o sistema no dia a dia. Para instalação, veja [DEPLOY.md](D
 2. **Cobranças:** escolha o cliente, a descrição, o valor (opcional), a data e o horário (de Brasília)
    e confira a **prévia**: é exatamente o texto que será enviado.
 3. Na hora marcada, o serviço de envio manda a mensagem. Acompanhe em **Cobranças** e **Histórico**.
-4. Para desistir de uma cobrança ainda não enviada, use **Cancelar**.
+4. Para mudar uma cobrança ainda não enviada, use **Editar**; para desistir dela, **Cancelar**.
 
 ## Status das cobranças
 
@@ -27,6 +27,7 @@ Como usar e manter o sistema no dia a dia. Para instalação, veja [DEPLOY.md](D
 |---|---|
 | Cliente sem autorização / inativo / descadastrado | Corrija o cadastro se for o caso e use **Reenviar**. |
 | Este número não tem WhatsApp | Confira o telefone no cadastro (DDD, 9º dígito). |
+| Passou mais de 72h do horário agendado | O envio ficou parado (ex.: WhatsApp desconectado por dias). Confira se o lembrete ainda faz sentido e use **Reenviar**. |
 | Limite de tentativas | Houve instabilidade repetida. Confira a conexão e use **Reenviar**. |
 | **Resultado desconhecido** | Veja abaixo. |
 
@@ -92,7 +93,7 @@ externo (UptimeRobot) manda e-mail. No Railway:
 
 - Use uma senha longa no painel e troque em **Configurações** se suspeitar de vazamento (as outras
   sessões abertas são encerradas na hora).
-- Após 5 senhas erradas, o login fica bloqueado por 15 minutos.
+- Após 10 senhas erradas para o mesmo e-mail, o login dele fica bloqueado por 15 minutos.
 - Esqueceu a senha? Rode de novo o `admin:create` (ver DEPLOY.md, passo 4).
 - Guarde `AUTH_SECRET` e `ENCRYPTION_KEY` fora do repositório (gerenciador de senhas).
 - A sessão do WhatsApp fica criptografada no volume do worker e nunca é exposta pelo painel.

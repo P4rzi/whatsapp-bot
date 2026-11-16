@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { localToUtc } from "@/lib/utils/datetime";
 import { parseMoney } from "@/lib/utils/money";
 import { formatPhone } from "@/lib/utils/phone";
-import { createChargeAction } from "@/modules/charges/charge.actions";
+import { createChargeAction, updateChargeAction } from "@/modules/charges/charge.actions";
 import { chargeFormSchema, type ChargeFormValues } from "@/modules/charges/charge.schema";
 import { renderTemplate, TEMPLATE_VARIABLES } from "@/modules/messaging/template";
 
@@ -26,14 +26,25 @@ type Props = {
   defaultMessage: string;
   defaultDate: string;
   defaultTime: string;
+  /** Edição: id da cobrança e valores atuais. */
+  chargeId?: string;
+  initialValues?: Omit<ChargeFormValues, "customerId"> & { customerId: string };
 };
 
-export function ChargeForm({ customers, defaultCustomerId, defaultMessage, defaultDate, defaultTime }: Props) {
+export function ChargeForm({
+  customers,
+  defaultCustomerId,
+  defaultMessage,
+  defaultDate,
+  defaultTime,
+  chargeId,
+  initialValues,
+}: Props) {
   const [pending, startTransition] = useTransition();
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
   const form = useForm<ChargeFormValues>({
     resolver: zodResolver(chargeFormSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       customerId: defaultCustomerId ?? "",
       description: "",
       amount: "",
@@ -68,7 +79,7 @@ export function ChargeForm({ customers, defaultCustomerId, defaultMessage, defau
 
   const onSubmit = form.handleSubmit((data) => {
     startTransition(async () => {
-      const result = await createChargeAction(data);
+      const result = chargeId ? await updateChargeAction(chargeId, data) : await createChargeAction(data);
       if (!result) return; // redirecionou
       if (!result.ok) {
         for (const [field, message] of Object.entries(result.fieldErrors ?? {})) {
@@ -153,7 +164,7 @@ export function ChargeForm({ customers, defaultCustomerId, defaultMessage, defau
         <div>
           <Button type="submit" disabled={pending}>
             {pending && <Loader2 className="animate-spin" />}
-            Agendar cobrança
+            {chargeId ? "Salvar alterações" : "Agendar cobrança"}
           </Button>
         </div>
       </FieldGroup>

@@ -20,6 +20,8 @@ export type ProcessorDeps = {
   sendTimeoutMs: number;
   /** Espera antes da tentativa N+1 (índice = tentativas já feitas - 1). */
   retryDelaysMs?: number[];
+  /** Atraso máximo em relação ao horário agendado; passou disso, não envia sozinho. 0/undefined = sem limite. */
+  maxDelayMs?: number;
 };
 
 export const DEFAULT_RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
@@ -101,6 +103,18 @@ export async function processCharge(chargeId: string, deps: ProcessorDeps): Prom
   if (!charge.customer.isActive) return failWithoutSending("Cliente inativo.");
   if (charge.customer.optedOutAt) return failWithoutSending("Cliente pediu para não receber mensagens.");
   if (!charge.customer.consentAt) return failWithoutSending("Cliente sem autorização registrada para receber mensagens.");
+
+  // 1b) Muito atrasada (ex.: WhatsApp ficou dias desconectado): não manda um lembrete fora de hora
+  //     sem o usuário conferir. Reenvio manual zera isso (usa nextAttemptAt como referência).
+  if (deps.maxDelayMs && deps.maxDelayMs > 0) {
+    const reference = charge.nextAttemptAt ?? charge.scheduledAt;
+    if (Date.now() - reference.getTime() > deps.maxDelayMs) {
+      const hours = Math.round(deps.maxDelayMs / 3_600_000);
+      return failWithoutSending(
+        `Não enviada: passou mais de ${hours}h do horário agendado (o envio estava parado). Use Reenviar se ainda fizer sentido.`,
+      );
+    }
+  }
 
   // 2) Conexão: se caiu entre a reserva e agora, devolve para a fila sem gastar tentativa.
   if (!provider.isConnected()) {

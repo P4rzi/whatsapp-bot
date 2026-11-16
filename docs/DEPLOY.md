@@ -100,6 +100,8 @@ como **Shared Variables** do projeto e ser referenciados nos serviços.
 | `MESSAGE_MAX_ATTEMPTS` | worker | Não | `3` |
 | `MESSAGE_MIN_INTERVAL_MS` | worker | Não | `5000` (5 s entre envios) |
 | `MESSAGE_SEND_TIMEOUT_MS` | worker | Não | `30000` |
+| `MESSAGE_MAX_DELAY_HOURS` | worker | Não | `72` — cobrança atrasada além disso não é enviada sozinha (0 = sem limite) |
+| `WHATSAPP_PROVIDER` | worker | Não | `baileys` (o valor `mock` é só para testes locais e é recusado em produção) |
 | `RETENTION_DAYS` | worker | Não | `180` (6 meses) |
 | `TIMEZONE` | web, worker | Não | `America/Sao_Paulo` |
 | `LOG_LEVEL` | web, worker | Não | `info` |
@@ -132,34 +134,61 @@ Cada push na branch `main` dispara o deploy dos dois serviços. Observações:
 
 ### Banco (essencial)
 
-> **Atenção (verificado em 16/11/2026):** os backups automáticos do Railway (aba **Postgres → Backups**)
-> exigem o plano **Pro**. No Hobby, a aba só permite ver e restaurar backups já existentes.
-> **Decisão pendente** entre: (1) um serviço agendado (cron) que roda `pg_dump` todo dia e guarda o
-> arquivo num Bucket do Railway; (2) o mesmo, guardando no Cloudflare R2 / Backblaze B2; (3) plano Pro.
-> Até a decisão, faça a cópia manual abaixo antes de cadastrar dados reais e, depois, pelo menos semanalmente.
+Os backups automáticos do Railway (aba **Postgres → Backups**) exigem o plano **Pro** (verificado em
+16/11/2026). Por isso o sistema tem um **backup próprio**: o script `npm run backup:prod` exporta todas as
+tabelas, compacta e **criptografa** (AES-256-GCM) e envia para um armazenamento compatível com S3, apagando
+as cópias mais antigas. Ele não depende do `pg_dump` nem da versão do Postgres.
 
-No plano Pro: em **Postgres → Backups**, ative **Daily** (mantido 6 dias) e **Weekly** (mantido ~1 mês)
-e crie um backup manual (**Backup now**) antes de mudanças grandes. Restaurar pelo Railway cria um
-volume novo a partir do backup e pede um deploy do Postgres (**Backups → Restore**).
+**Onde guardar** (escolha um; o código é o mesmo, só mudam as variáveis):
 
-Em qualquer plano, faça também uma **cópia externa** (exige habilitar temporariamente o acesso público
-do Postgres para obter a `DATABASE_PUBLIC_URL`, ou usar `railway connect Postgres`):
+| Destino | Prós | Contras |
+|---|---|---|
+| **Bucket do Railway** (+ Add → Bucket) | Tudo no mesmo painel, custo de centavos | A cópia fica no mesmo provedor |
+| **Cloudflare R2 / Backblaze B2** | Cópia fora do Railway (mais seguro), camada gratuita | Exige conta em outro serviço |
+
+#### Configurar o serviço de backup agendado
+
+1. Gere uma chave **só para os backups** e guarde num gerenciador de senhas (sem ela, os backups são ilegíveis):
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+2. Crie o destino (Bucket do Railway, ou bucket no R2/B2) e anote: endpoint, nome do bucket, região,
+   access key e secret key.
+3. No projeto Railway: **+ Add → GitHub Repository → whatsapp-bot**, renomeie para `backup`.
+4. **Settings → Deploy:** Custom Start Command `npm run backup:prod`; **Cron Schedule** `0 6 * * *`
+   (todo dia às 6h UTC = 3h de Brasília); Restart Policy **Never**. Sem domínio, sem volume, sem pre-deploy.
+5. **Variables:**
+
+   | Variável | Valor |
+   |---|---|
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+   | `NODE_ENV` | `production` |
+   | `BACKUP_ENCRYPTION_KEY` | a chave do passo 1 |
+   | `BACKUP_KEEP` | `14` (backups mantidos) |
+   | `BACKUP_S3_BUCKET` | nome do bucket |
+   | `BACKUP_S3_ENDPOINT` | endpoint S3 (vazio só para AWS) |
+   | `BACKUP_S3_REGION` | região (`auto` no R2) |
+   | `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` | credenciais |
+
+6. Deploy. Nos logs do serviço deve aparecer `backup concluído` com a quantidade de registros.
+
+#### Restaurar
+
+Sempre teste primeiro no banco de **desenvolvimento**. Localmente, com as variáveis `BACKUP_*` no `.env`
+e o `DATABASE_URL` apontando para o banco de destino:
 
 ```bash
-pg_dump "$DATABASE_PUBLIC_URL" --format=custom --no-owner --file=backup-AAAA-MM-DD.dump
+npm run restore -- --list
+npm run restore -- --file latest --confirm
 ```
 
-Guarde o arquivo em local seguro (contém dados pessoais de clientes — LGPD).
+A restauração **substitui** todos os dados do banco de destino, numa única transação. Em produção, rode no
+Console do serviço web (`npm run restore:prod -- ...`) com `RESTORE_ALLOW_PRODUCTION=sim`.
 
-### Testar a restauração (faça pelo menos uma vez, e depois a cada poucos meses)
+**Teste de restauração:** faça uma vez após configurar e depois a cada poucos meses (restaure o backup mais
+recente no banco de desenvolvimento e confira clientes, cobranças e histórico no painel local).
 
-1. Gere um dump da produção com o comando acima.
-2. Restaure no banco de **desenvolvimento** (nunca na produção):
-   ```bash
-   pg_restore --clean --if-exists --no-owner --dbname="URL_DO_BANCO_DE_DESENVOLVIMENTO" backup-AAAA-MM-DD.dump
-   ```
-3. Aponte o `.env` local para o banco de desenvolvimento, rode `npm run dev` e confira se clientes,
-   cobranças e histórico aparecem.
+No plano Pro, os backups do próprio Railway (**Postgres → Backups**, Daily + Weekly) também podem ser ativados.
 
 ### Sessão do WhatsApp (opcional)
 

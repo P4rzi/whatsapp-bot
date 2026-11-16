@@ -53,6 +53,11 @@ npm run dev              # painel em http://localhost:3000
 npm run dev:worker       # worker, em outro terminal
 ```
 
+**Testar sem número real:** rode o worker em modo simulado (PowerShell: `$env:WHATSAPP_PROVIDER='mock'; npm run dev:worker`).
+O QR é "lido" sozinho após 5 s e os envios são apenas registrados. Com ele rodando,
+`npx tsx --env-file=.env src/scripts/e2e-local.ts` executa um fluxo completo (conectar, cadastrar,
+agendar, editar e enviar). O modo simulado é recusado em produção.
+
 ## Scripts
 
 | Script | O que faz |
@@ -64,6 +69,8 @@ npm run dev:worker       # worker, em outro terminal
 | `db:migrate:dev` | Cria/aplica migrações em desenvolvimento |
 | `db:generate` | Gera o cliente Prisma |
 | `admin:create` / `admin:create:prod` | Cria o administrador ou redefine a senha |
+| `backup` / `backup:prod` | Gera backup criptografado do banco (ver docs/DEPLOY.md) |
+| `restore` / `restore:prod` | Lista (`-- --list`) ou restaura (`-- --file latest --confirm`) um backup |
 | `typecheck` / `lint` / `test` | Verificações |
 
 ## Testes

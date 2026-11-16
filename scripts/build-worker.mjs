@@ -10,6 +10,8 @@ await build({
   entryPoints: {
     "worker/index": path.join(root, "src/worker/index.ts"),
     "scripts/create-admin": path.join(root, "src/scripts/create-admin.ts"),
+    "scripts/backup": path.join(root, "src/scripts/backup.ts"),
+    "scripts/restore": path.join(root, "src/scripts/restore.ts"),
   },
   outdir: path.join(root, "dist"),
   outExtension: { ".js": ".mjs" },

@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { utcToLocalParts } from "@/lib/utils/datetime";
 import { chargeFormSchema, type ChargeFormValues } from "@/modules/charges/charge.schema";
-import { cancelCharge, ChargeError, createCharge } from "@/modules/charges/charge.service";
+import { cancelCharge, ChargeError, createCharge, updateCharge } from "@/modules/charges/charge.service";
 import { createTestCustomer, resetDb } from "./db";
 
 beforeEach(resetDb);
@@ -95,5 +95,41 @@ describe("cancelamento de cobranças", () => {
     await expect(cancelCharge(ch.id)).rejects.toBeInstanceOf(ChargeError);
     await prisma.charge.update({ where: { id: ch.id }, data: { status: "SENT" } });
     await expect(cancelCharge(ch.id)).rejects.toBeInstanceOf(ChargeError);
+  });
+});
+
+describe("edição de cobranças", () => {
+  it("edita cobrança agendada e reinicia o ciclo de tentativas", async () => {
+    const c = await createTestCustomer();
+    const ch = await createCharge(formFor(c.id));
+    await prisma.charge.update({
+      where: { id: ch.id },
+      data: { attemptCount: 2, nextAttemptAt: new Date(), lastError: "instabilidade" },
+    });
+    await updateCharge(ch.id, formFor(c.id, { description: "Nova descrição", amount: "99,90", date: "2030-05-01", time: "08:30" }));
+    const after = await prisma.charge.findUniqueOrThrow({ where: { id: ch.id } });
+    expect(after.description).toBe("Nova descrição");
+    expect(after.amount?.toString()).toBe("99.9");
+    expect(after.scheduledAt.toISOString()).toBe("2030-05-01T11:30:00.000Z");
+    expect(after.attemptCount).toBe(0);
+    expect(after.nextAttemptAt).toBeNull();
+    expect(after.lastError).toBeNull();
+  });
+
+  it("não edita cobrança em envio, enviada ou cancelada", async () => {
+    const c = await createTestCustomer();
+    for (const status of ["PROCESSING", "SENT", "CANCELLED"] as const) {
+      const ch = await createCharge(formFor(c.id));
+      await prisma.charge.update({ where: { id: ch.id }, data: { status } });
+      await expect(updateCharge(ch.id, formFor(c.id, { description: "x" }))).rejects.toBeInstanceOf(ChargeError);
+      expect((await prisma.charge.findUniqueOrThrow({ where: { id: ch.id } })).description).toBe("Mensalidade");
+    }
+  });
+
+  it("recusa trocar para cliente sem autorização", async () => {
+    const ok = await createTestCustomer();
+    const noConsent = await createTestCustomer({ consent: false, phone: "5511900000003" });
+    const ch = await createCharge(formFor(ok.id));
+    await expect(updateCharge(ch.id, formFor(noConsent.id))).rejects.toBeInstanceOf(ChargeError);
   });
 });

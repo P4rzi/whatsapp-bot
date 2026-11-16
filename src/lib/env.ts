@@ -27,6 +27,14 @@ const workerSchema = base.extend({
   MESSAGE_SEND_TIMEOUT_MS: z.coerce.number().int().min(5000).default(30000),
   /// Retenção do histórico de tentativas, em dias (LGPD).
   RETENTION_DAYS: z.coerce.number().int().min(30).default(180),
+  /// Cobrança vencida há mais que isso (ex.: WhatsApp ficou dias desconectado) não é enviada sozinha:
+  /// fica como falha para o usuário decidir se ainda faz sentido. 0 = sem limite.
+  MESSAGE_MAX_DELAY_HOURS: z.coerce.number().int().min(0).default(72),
+  /// "mock" simula o WhatsApp (testes locais). Proibido em produção.
+  WHATSAPP_PROVIDER: z.enum(["baileys", "mock"]).default("baileys"),
+}).refine((v) => !(v.NODE_ENV === "production" && v.WHATSAPP_PROVIDER === "mock"), {
+  path: ["WHATSAPP_PROVIDER"],
+  message: "WHATSAPP_PROVIDER=mock não é permitido em produção",
 });
 
 export type WebEnv = z.infer<typeof webSchema>;
