@@ -8,7 +8,7 @@ import {
   type WASocket,
 } from "@whiskeysockets/baileys";
 import type { Logger } from "pino";
-import type { DisconnectInfo, ProviderEvents, SendResult, WhatsAppProvider } from "@/modules/whatsapp/provider";
+import { ProviderNotConnectedError, type DisconnectInfo, type ProviderEvents, type SendResult, type WhatsAppProvider } from "@/modules/whatsapp/provider";
 import { classifyDisconnect } from "./events";
 import { hasRegisteredSession, openEncryptedAuthState } from "./session";
 
@@ -130,13 +130,13 @@ export class BaileysProvider implements WhatsAppProvider {
   }
 
   async resolveRecipient(phone: string): Promise<string | null> {
-    if (!this.sock || !this.connected) throw new Error("WhatsApp não está conectado");
+    if (!this.sock || !this.connected) throw new ProviderNotConnectedError();
     const [result] = (await this.sock.onWhatsApp(phone)) ?? [];
     return result?.exists ? result.jid : null;
   }
 
   async sendText(recipient: string, text: string): Promise<SendResult> {
-    if (!this.sock || !this.connected) throw new Error("WhatsApp não está conectado");
+    if (!this.sock || !this.connected) throw new ProviderNotConnectedError();
     const msg = await this.sock.sendMessage(recipient, { text });
     return { providerMessageId: msg?.key?.id ?? null };
   }

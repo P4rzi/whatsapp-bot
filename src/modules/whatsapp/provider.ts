@@ -28,6 +28,17 @@ export type ProviderEvents = {
 
 export type SendResult = { providerMessageId: string | null };
 
+/**
+ * Erro lançado ANTES de qualquer coisa ir para a rede (ex.: não conectado).
+ * É o único caso em que tentar de novo é seguro: com certeza nada foi enviado.
+ */
+export class ProviderNotConnectedError extends Error {
+  constructor(message = "WhatsApp não está conectado") {
+    super(message);
+    this.name = "ProviderNotConnectedError";
+  }
+}
+
 export interface WhatsAppProvider {
   /** Abre a conexão usando a sessão salva (ou inicia o fluxo de QR se não houver). */
   start(): Promise<void>;

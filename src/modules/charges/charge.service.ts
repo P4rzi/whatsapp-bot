@@ -52,6 +52,28 @@ export async function createCharge(values: ChargeFormValues) {
 }
 
 /**
+ * Reenvio manual de uma cobrança que falhou: volta para a fila agora, com um novo ciclo de tentativas.
+ * Só o usuário dispara isso (inclusive para resultado desconhecido, depois de conferir no WhatsApp).
+ */
+export async function retryCharge(id: string) {
+  const charge = await prisma.charge.findUnique({
+    where: { id },
+    select: { status: true, customer: { select: { isActive: true, optedOutAt: true, consentAt: true } } },
+  });
+  if (!charge) throw new ChargeError("Cobrança não encontrada.");
+  if (charge.status !== "FAILED") throw new ChargeError("Só é possível reenviar cobranças que falharam.");
+  const c = charge.customer;
+  if (!c.isActive || c.optedOutAt || !c.consentAt) {
+    throw new ChargeError("O cliente está inativo, descadastrado ou sem autorização. Ajuste o cadastro antes de reenviar.");
+  }
+  const { count } = await prisma.charge.updateMany({
+    where: { id, status: "FAILED" },
+    data: { status: "PENDING", attemptCount: 0, nextAttemptAt: new Date(), lastError: null },
+  });
+  if (count === 0) throw new ChargeError("A cobrança mudou de status. Atualize a página.");
+}
+
+/**
  * Cancela uma cobrança ainda não processada. A condição no UPDATE garante que uma cobrança
  * que o worker acabou de reservar (PROCESSING) não seja cancelada no meio do envio.
  */

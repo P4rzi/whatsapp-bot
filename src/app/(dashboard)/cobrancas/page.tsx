@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { CancelChargeButton } from "@/components/charges/cancel-charge-button";
 import { CHARGE_STATUS_LABEL, ChargeStatusBadge } from "@/components/charges/charge-status-badge";
+import { RetryChargeButton } from "@/components/charges/retry-charge-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -114,6 +115,12 @@ export default async function ChargesPage({ searchParams }: PageProps<"/cobranca
                     <CancelChargeButton
                       chargeId={ch.id}
                       label={`${ch.customer.name} — ${ch.description}, ${formatInTz(ch.scheduledAt)}`}
+                    />
+                  )}
+                  {ch.status === "FAILED" && (
+                    <RetryChargeButton
+                      chargeId={ch.id}
+                      unknownResult={!!ch.lastError?.includes("Resultado desconhecido")}
                     />
                   )}
                 </TableCell>

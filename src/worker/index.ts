@@ -7,11 +7,13 @@ import { prisma } from "@/lib/prisma";
 import { expireStaleCommands } from "@/modules/whatsapp/command.repository";
 import { prismaConnectionStore } from "@/modules/whatsapp/connection.repository";
 import { processCommands } from "./commands";
+import { recoverStuckCharges } from "./queue";
+import { runRetention, runSchedulerCycle } from "./scheduler";
 import { BaileysProvider } from "./whatsapp/client";
 import { ConnectionManager } from "./whatsapp/connection";
 import { acquireSessionLock } from "./whatsapp/session";
 
-// Processo 2 — Worker: mantém a conexão do WhatsApp e (Etapa 4) processa a fila de cobranças.
+// Processo 2 — Worker: mantém a conexão do WhatsApp e processa a fila de cobranças.
 // Roda continuamente, independente do painel. Comunicação com o painel só pelo banco.
 
 const logger = createLogger("worker");
@@ -19,8 +21,8 @@ const instanceId = randomUUID();
 
 /** Intervalo de leitura de comandos do painel (conectar/desconectar): curto para o painel responder rápido. */
 const COMMAND_POLL_MS = 2_000;
-/** Intervalo do batimento (heartbeat) usado nos health checks. */
-const HEARTBEAT_MS = 15_000;
+/** Intervalo da limpeza de dados antigos (retenção). */
+const RETENTION_EVERY_MS = 6 * 60 * 60_000;
 
 let stopping = false;
 const timers: NodeJS.Timeout[] = [];
@@ -69,11 +71,36 @@ async function main() {
   manager = new ConnectionManager(provider, prismaConnectionStore, logger);
   await manager.init();
 
+  // Cobranças que ficaram em PROCESSING com o worker anterior (que morreu/reiniciou).
+  const recovered = await recoverStuckCharges({ exceptInstance: instanceId });
+  if (recovered.requeued || recovered.unknown) logger.warn(recovered, "cobranças do worker anterior recuperadas");
+
   const m = manager;
   every(COMMAND_POLL_MS, "commands", async () => {
     await processCommands(m, logger);
   });
-  every(HEARTBEAT_MS, "heartbeat", () => heartbeat());
+
+  // Ciclo de envio. O batimento é gravado ao fim de cada ciclo: o health check
+  // só considera o worker saudável se os ciclos estiverem de fato acontecendo.
+  every(env.WORKER_POLL_INTERVAL_MS, "scheduler", async () => {
+    const started = Date.now();
+    try {
+      await runSchedulerCycle({
+        provider,
+        instanceId,
+        logger,
+        isConnected: () => m.isConnected(),
+        maxAttempts: env.MESSAGE_MAX_ATTEMPTS,
+        sendTimeoutMs: env.MESSAGE_SEND_TIMEOUT_MS,
+        minIntervalMs: env.MESSAGE_MIN_INTERVAL_MS,
+        shouldStop: () => stopping,
+      });
+    } finally {
+      await heartbeat(Date.now() - started);
+    }
+  });
+
+  every(RETENTION_EVERY_MS, "retention", () => runRetention(env.RETENTION_DAYS, logger));
 }
 
 async function shutdown(signal: string) {

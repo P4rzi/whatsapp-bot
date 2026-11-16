@@ -7,7 +7,7 @@ import { toFieldErrors, type ActionResult } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { chargeFormSchema, type ChargeFormValues } from "./charge.schema";
-import { cancelCharge, ChargeError, createCharge } from "./charge.service";
+import { cancelCharge, ChargeError, createCharge, retryCharge } from "./charge.service";
 
 function fail(err: unknown, fallback: string): ActionResult {
   if (err instanceof ChargeError) return { ok: false, message: err.message };
@@ -28,6 +28,19 @@ export async function createChargeAction(values: ChargeFormValues): Promise<Acti
     return fail(err, "Não foi possível agendar a cobrança.");
   }
   redirect("/cobrancas?status=PENDING");
+}
+
+export async function retryChargeAction(id: string): Promise<ActionResult> {
+  await requireUser();
+  if (!z.uuid().safeParse(id).success) return { ok: false, message: "Cobrança inválida." };
+  try {
+    await retryCharge(id);
+    logger.info({ event: "charge_retry", chargeId: id }, "reenvio manual solicitado");
+  } catch (err) {
+    return fail(err, "Não foi possível reenviar a cobrança.");
+  }
+  refresh();
+  return { ok: true, message: "Cobrança devolvida para a fila de envio." };
 }
 
 export async function cancelChargeAction(id: string): Promise<ActionResult> {

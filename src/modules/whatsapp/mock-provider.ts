@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { DisconnectInfo, ProviderEvents, SendResult, WhatsAppProvider } from "./provider";
+import { ProviderNotConnectedError, type DisconnectInfo, type ProviderEvents, type SendResult, type WhatsAppProvider } from "./provider";
 
 // Provedor falso para testes automatizados: não conecta em nada, mas se comporta como o real.
 // Os testes controlam o que acontece (QR, conexão, queda, falha de envio).
@@ -16,6 +16,8 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
   notOnWhatsApp = new Set<string>();
   /** Próximo envio falha com este erro (uma vez). */
   failNextSend: Error | null = null;
+  /** Próxima consulta de número falha com este erro (uma vez). */
+  failNextResolve: Error | null = null;
   /** Próximo envio nunca responde (simula timeout). */
   hangNextSend = false;
   /** O que start() faz: emitir QR (sem sessão) ou abrir direto (com sessão). */
@@ -54,10 +56,16 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
     return this.connected;
   }
   async resolveRecipient(phone: string) {
+    if (!this.connected) throw new ProviderNotConnectedError();
+    if (this.failNextResolve) {
+      const err = this.failNextResolve;
+      this.failNextResolve = null;
+      throw err;
+    }
     return this.notOnWhatsApp.has(phone) ? null : `${phone}@s.whatsapp.net`;
   }
   async sendText(recipient: string, text: string): Promise<SendResult> {
-    if (!this.connected) throw new Error("not connected");
+    if (!this.connected) throw new ProviderNotConnectedError();
     if (this.hangNextSend) {
       this.hangNextSend = false;
       return new Promise<SendResult>(() => {});
