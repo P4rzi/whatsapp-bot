@@ -2,6 +2,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionPatch, ConnectionStore } from "@/modules/whatsapp/connection.repository";
 import { MockWhatsAppProvider } from "@/modules/whatsapp/mock-provider";
+import { ProviderFatalError } from "@/modules/whatsapp/provider";
 import { backoffDelay, ConnectionManager, type ReconnectOptions } from "@/worker/whatsapp/connection";
 import { classifyDisconnect, WA_CODES } from "@/worker/whatsapp/events";
 
@@ -207,5 +208,29 @@ describe("gerenciador de conexão", () => {
     expect(await provider.hasSession()).toBe(true);
     expect(store.state.status).toBe("DISCONNECTED");
     expect(provider.startCalls).toBe(1);
+  });
+});
+
+describe("erros que não se resolvem tentando de novo", () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
+  afterEach(() => vi.useRealTimers());
+
+  it("chave de criptografia errada: ERROR com explicação, sem reconectar sozinho", async () => {
+    const { provider, store, manager } = setup(true);
+    provider.failNextStart = new ProviderFatalError("A sessão salva do WhatsApp não abre com a ENCRYPTION_KEY atual.");
+    await manager.init();
+    expect(store.state.status).toBe("ERROR");
+    expect(store.state.lastError).toMatch(/ENCRYPTION_KEY/);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(provider.startCalls).toBe(1);
+  });
+
+  it("falha comum ao iniciar: tenta de novo com espera", async () => {
+    const { provider, store, manager } = setup(true);
+    provider.failNextStart = new Error("rede indisponível");
+    await manager.init();
+    expect(store.state.status).toBe("RECONNECTING");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(provider.startCalls).toBe(2);
   });
 });

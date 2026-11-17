@@ -21,7 +21,7 @@ const MESSAGES: Record<Kind, string> = {
 
 export async function whatsappCommandAction(kind: Kind): Promise<ActionResult> {
   const user = await requireUser();
-  if (!(kind in TYPES)) return { ok: false, message: "Comando inválido." };
+  if (typeof kind !== "string" || !Object.hasOwn(TYPES, kind)) return { ok: false, message: "Comando inválido." };
   try {
     await enqueueCommand(TYPES[kind]);
     logger.info({ event: "whatsapp_command", kind, userId: user.id }, "comando do WhatsApp registrado");

@@ -18,6 +18,8 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
   failNextSend: Error | null = null;
   /** Próxima consulta de número falha com este erro (uma vez). */
   failNextResolve: Error | null = null;
+  /** Próximo start() falha com este erro (uma vez). */
+  failNextStart: Error | null = null;
   /** Próximo envio nunca responde (simula timeout). */
   hangNextSend = false;
   /** O que start() faz: emitir QR (sem sessão) ou abrir direto (com sessão). */
@@ -37,6 +39,11 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
 
   async start() {
     this.startCalls++;
+    if (this.failNextStart) {
+      const err = this.failNextStart;
+      this.failNextStart = null;
+      throw err;
+    }
     if (!this.autoOpenOnStart) return;
     if (this.session) this.simulateOpen();
     else {

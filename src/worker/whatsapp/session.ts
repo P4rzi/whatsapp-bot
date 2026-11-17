@@ -11,6 +11,7 @@ import {
   type SignalDataTypeMap,
 } from "@whiskeysockets/baileys";
 import { decrypt, encrypt } from "@/lib/crypto";
+import { ProviderFatalError } from "@/modules/whatsapp/provider";
 
 // Armazenamento persistente da sessão do WhatsApp (credenciais + chaves Signal).
 // - Cada item vira um arquivo criptografado (AES-256-GCM) dentro da pasta da sessão.
@@ -84,7 +85,16 @@ export async function openEncryptedAuthState(folder: string, key: Buffer): Promi
         throw err;
       }
       // Erro de decifragem propaga: chave errada não pode virar "sessão vazia" silenciosamente.
-      return JSON.parse(decrypt(raw, key).toString("utf8"), BufferJSON.reviver) as T;
+      let plain: Buffer;
+      try {
+        plain = decrypt(raw, key);
+      } catch {
+        throw new ProviderFatalError(
+          "A sessão salva do WhatsApp não abre com a ENCRYPTION_KEY atual (a chave mudou ou o arquivo foi alterado). " +
+            "Volte a chave anterior ou clique em Desconectar e depois Conectar para gerar uma sessão nova.",
+        );
+      }
+      return JSON.parse(plain.toString("utf8"), BufferJSON.reviver) as T;
     });
   }
 

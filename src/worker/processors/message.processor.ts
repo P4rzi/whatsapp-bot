@@ -55,7 +55,10 @@ export async function processCharge(chargeId: string, deps: ProcessorDeps): Prom
   if (!charge || charge.status !== "PROCESSING" || charge.lockedBy !== instanceId) return "skipped";
 
   const log = logger.child({ chargeId, phone: maskPhone(charge.customer.phone) });
-  const attemptNumber = (await prisma.messageAttempt.count({ where: { chargeId } })) + 1;
+  // Maior número já usado + 1 (não a contagem: a retenção apaga tentativas antigas e a contagem
+  // poderia repetir um número existente, violando a chave única e travando a cobrança).
+  const last = await prisma.messageAttempt.aggregate({ where: { chargeId }, _max: { attemptNumber: true } });
+  const attemptNumber = (last._max.attemptNumber ?? 0) + 1;
 
   /** Atualiza a cobrança só se ainda for nossa (protege contra recuperação concorrente). */
   const finishCharge = (data: Parameters<typeof prisma.charge.updateMany>[0]["data"]) =>

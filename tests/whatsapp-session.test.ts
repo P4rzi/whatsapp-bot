@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { decrypt, encrypt, parseKey } from "@/lib/crypto";
+import { ProviderFatalError } from "@/modules/whatsapp/provider";
 import {
   acquireSessionLock,
   hasRegisteredSession,
@@ -140,5 +141,15 @@ describe("lock da sessão (um worker por sessão)", () => {
     await utimes(path.join(dir, ".worker.lock"), old, old);
     const release = await acquireSessionLock(dir, "worker-novo");
     await release();
+  });
+});
+
+describe("chave errada vira erro explicativo", () => {
+  it("abrir a sessão com outra chave lança ProviderFatalError com instruções", async () => {
+    const s = await openEncryptedAuthState(dir, key);
+    await s.saveCreds();
+    const err = await openEncryptedAuthState(dir, randomBytes(32)).catch((e) => e);
+    expect(err).toBeInstanceOf(ProviderFatalError);
+    expect(String(err.message)).toMatch(/ENCRYPTION_KEY/);
   });
 });

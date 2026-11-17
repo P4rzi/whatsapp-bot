@@ -368,3 +368,20 @@ describe("batimento durante lotes longos", () => {
     expect(provider.sent).toHaveLength(2);
   });
 });
+
+describe("numeração das tentativas", () => {
+  it("continua do maior número mesmo depois que a retenção apagou tentativas antigas", async () => {
+    const c = await createTestCustomer();
+    const ch = await createCharge(c.id);
+    // Histórico: tentativa 1 (antiga, apagada pela retenção) e tentativa 2 (recente, mantida).
+    await prisma.messageAttempt.create({ data: { chargeId: ch.id, attemptNumber: 1, status: "FAILED", attemptedAt: new Date(Date.now() - 200 * 86_400_000) } });
+    await prisma.messageAttempt.create({ data: { chargeId: ch.id, attemptNumber: 2, status: "FAILED" } });
+    await runRetention(180, logger);
+    expect(await prisma.messageAttempt.count({ where: { chargeId: ch.id } })).toBe(1);
+
+    await runSchedulerCycle(deps());
+    const after = await get(ch.id);
+    expect(after.status).toBe("SENT");
+    expect(after.attempts.map((a) => a.attemptNumber)).toEqual([2, 3]);
+  });
+});

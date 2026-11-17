@@ -32,6 +32,17 @@ export type SendResult = { providerMessageId: string | null };
  * Erro lançado ANTES de qualquer coisa ir para a rede (ex.: não conectado).
  * É o único caso em que tentar de novo é seguro: com certeza nada foi enviado.
  */
+/**
+ * Erro que não se resolve tentando de novo (ex.: a chave de criptografia não abre a sessão salva).
+ * O gerenciador de conexão para de reconectar e mostra a mensagem no painel.
+ */
+export class ProviderFatalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProviderFatalError";
+  }
+}
+
 export class ProviderNotConnectedError extends Error {
   constructor(message = "WhatsApp não está conectado") {
     super(message);

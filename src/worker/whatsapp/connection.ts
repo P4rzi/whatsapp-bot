@@ -1,6 +1,6 @@
 import type { Logger } from "pino";
 import type { ConnectionStore } from "@/modules/whatsapp/connection.repository";
-import type { DisconnectInfo, WhatsAppProvider } from "@/modules/whatsapp/provider";
+import { ProviderFatalError, type DisconnectInfo, type WhatsAppProvider } from "@/modules/whatsapp/provider";
 import { DISCONNECT_MESSAGES } from "./events";
 
 // Gerencia o ciclo de vida da conexão: conectar, QR, reconexão com backoff, logout.
@@ -69,6 +69,13 @@ export class ConnectionManager {
       await this.provider.start();
     } catch (err) {
       this.logger.error({ err }, "falha ao iniciar conexão com o WhatsApp");
+      if (err instanceof ProviderFatalError) {
+        // Tentar de novo não resolve: para e explica no painel.
+        this.phase = "idle";
+        this.attempts = 0;
+        await this.store.update({ status: "ERROR", qrCode: null, qrUpdatedAt: null, lastError: err.message });
+        return;
+      }
       await this.onClose({ kind: "transient", message: err instanceof Error ? err.message : String(err) });
     }
   }
