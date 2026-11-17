@@ -105,6 +105,7 @@ async function main() {
         minIntervalMs: env.MESSAGE_MIN_INTERVAL_MS,
         maxDelayMs: env.MESSAGE_MAX_DELAY_HOURS * 3_600_000,
         shouldStop: () => stopping,
+        onProgress: () => heartbeat(Date.now() - started),
       });
     } finally {
       await heartbeat(Date.now() - started);

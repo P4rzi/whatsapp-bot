@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { customerFormSchema, emptyCustomerForm } from "@/modules/customers/customer.schema";
-import { createCustomer, CustomerError, deleteCustomer, DuplicatePhoneError, updateCustomer } from "@/modules/customers/customer.service";
+import { createCustomer, CustomerError, deleteCustomer, DuplicatePhoneError, listCustomers, updateCustomer } from "@/modules/customers/customer.service";
 import { createTestCustomer, resetDb } from "./db";
 
 beforeEach(resetDb);
@@ -94,5 +94,31 @@ describe("exclusão de clientes", () => {
     expect(await prisma.customer.count()).toBe(0);
     expect(await prisma.charge.count()).toBe(0);
     expect(await prisma.messageAttempt.count()).toBe(0);
+  });
+});
+
+describe("lista de clientes", () => {
+  it("pagina de 50 em 50 em ordem alfabética, sem esconder ninguém", async () => {
+    await prisma.customer.createMany({
+      data: Array.from({ length: 120 }, (_, i) => ({
+        name: `Cliente ${String(i).padStart(3, "0")}`,
+        phone: `55119${String(10000000 + i)}`,
+      })),
+    });
+    const p1 = await listCustomers("", 1);
+    const p3 = await listCustomers("", 3);
+    expect(p1.total).toBe(120);
+    expect(p1.pages).toBe(3);
+    expect(p1.items).toHaveLength(50);
+    expect(p1.items[0].name).toBe("Cliente 000");
+    expect(p3.items).toHaveLength(20);
+    expect(p3.items.at(-1)?.name).toBe("Cliente 119");
+  });
+
+  it("busca por nome ou parte do telefone", async () => {
+    await createTestCustomer({ name: "Ana Paula", phone: "5521912345678" });
+    await createTestCustomer({ name: "Bruno", phone: "5511900000000" });
+    expect((await listCustomers("ana")).items.map((c) => c.name)).toEqual(["Ana Paula"]);
+    expect((await listCustomers("(21) 91234")).items.map((c) => c.name)).toEqual(["Ana Paula"]);
   });
 });

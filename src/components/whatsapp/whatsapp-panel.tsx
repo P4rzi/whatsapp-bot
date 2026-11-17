@@ -83,11 +83,16 @@ export function WhatsAppPanel({ initial }: { initial: WhatsAppStatusView }) {
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <WhatsAppStatusBadge status={view.status} />
-              {view.pendingCommand && (
-                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Loader2 className="size-3.5 animate-spin" /> processando pedido…
-                </span>
-              )}
+              {view.pendingCommand &&
+                (view.workerOnline ? (
+                  <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" /> processando pedido…
+                  </span>
+                ) : (
+                  <span className="text-sm text-amber-700 dark:text-amber-300">
+                    pedido registrado; será atendido quando o serviço de envio voltar
+                  </span>
+                ))}
             </div>
 
             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
@@ -168,6 +173,8 @@ export function WhatsAppPanel({ initial }: { initial: WhatsAppStatusView }) {
             <img src={view.qrDataUrl} alt="QR Code para conectar o WhatsApp" className="size-64 rounded-lg bg-white p-2" />
           ) : view.status === "CONNECTED" ? (
             <p className="text-center text-sm text-muted-foreground">Conectado. Não é preciso ler o QR Code.</p>
+          ) : !view.workerOnline ? (
+            <p className="text-center text-sm text-muted-foreground">O serviço de envio está fora do ar. O QR Code aparece quando ele voltar.</p>
           ) : view.status === "CONNECTING" || view.status === "RECONNECTING" || view.pendingCommand ? (
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           ) : (

@@ -65,6 +65,25 @@ describe("sessão do WhatsApp em disco", () => {
     expect(await hasRegisteredSession(dir, key)).toBe(true);
   });
 
+  it("flush() garante que credenciais salvas sem esperar já estão no disco (reinício logo após o QR)", async () => {
+    const s = await openEncryptedAuthState(dir, key);
+    s.state.creds.registered = true;
+    s.state.creds.me = { id: "5511999990000:1@s.whatsapp.net" };
+    void s.saveCreds(); // como no evento creds.update: não é aguardado
+    await s.flush();
+    expect(await hasRegisteredSession(dir, key)).toBe(true);
+    const reopened = await openEncryptedAuthState(dir, key);
+    expect(reopened.state.creds.me?.id).toBe("5511999990000:1@s.whatsapp.net");
+  });
+
+  it("clear() espera escritas pendentes, para não sobrar arquivo depois do logout", async () => {
+    const s = await openEncryptedAuthState(dir, key);
+    void s.saveCreds();
+    void s.state.keys.set({ session: { a: new Uint8Array([1]) } });
+    await s.clear();
+    expect((await readdir(dir)).filter((n) => n.endsWith(".enc"))).toEqual([]);
+  });
+
   it("remove chaves com valor null", async () => {
     const s = await openEncryptedAuthState(dir, key);
     await s.state.keys.set({ "sender-key": { x: new Uint8Array([9]) } });

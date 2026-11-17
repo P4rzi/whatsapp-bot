@@ -7,7 +7,9 @@ import type { CustomerFormValues } from "./customer.schema";
 
 export class CustomerError extends Error {}
 
-export function listCustomers(search?: string) {
+export const CUSTOMER_PAGE_SIZE = 50;
+
+export async function listCustomers(search?: string, page = 1) {
   const q = search?.trim();
   const digits = q?.replace(/\D/g, "");
   const where: Prisma.CustomerWhereInput = q
@@ -18,12 +20,18 @@ export function listCustomers(search?: string) {
         ],
       }
     : {};
-  return prisma.customer.findMany({
-    where,
-    orderBy: { name: "asc" },
-    take: 200,
-    include: { _count: { select: { charges: { where: { status: { in: ["PENDING", "PROCESSING"] } } } } } },
-  });
+  const current = Math.max(1, page);
+  const [items, total] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      skip: (current - 1) * CUSTOMER_PAGE_SIZE,
+      take: CUSTOMER_PAGE_SIZE,
+      include: { _count: { select: { charges: { where: { status: { in: ["PENDING", "PROCESSING"] } } } } } },
+    }),
+    prisma.customer.count({ where }),
+  ]);
+  return { items, total, page: current, pages: Math.max(1, Math.ceil(total / CUSTOMER_PAGE_SIZE)) };
 }
 
 export function getCustomer(id: string) {

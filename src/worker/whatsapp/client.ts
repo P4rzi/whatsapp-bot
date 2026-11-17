@@ -1,7 +1,6 @@
 import { EventEmitter } from "node:events";
 import {
   Browsers,
-
   fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
   makeWASocket,
@@ -10,7 +9,7 @@ import {
 import type { Logger } from "pino";
 import { ProviderNotConnectedError, type DisconnectInfo, type ProviderEvents, type SendResult, type WhatsAppProvider } from "@/modules/whatsapp/provider";
 import { classifyDisconnect } from "./events";
-import { hasRegisteredSession, openEncryptedAuthState } from "./session";
+import { hasRegisteredSession, openEncryptedAuthState, type EncryptedAuthState } from "./session";
 
 // Implementação do WhatsAppProvider com Baileys (WhatsApp Web, não oficial).
 // Não envia confirmações de leitura, não fica "online" e não baixa o histórico completo:
@@ -23,6 +22,24 @@ export class BaileysProvider implements WhatsAppProvider {
   private sock: WASocket | null = null;
   private connected = false;
   private closingManually = false;
+  /**
+   * Um único armazenamento de sessão por processo. Reabrir a cada conexão criava uma corrida: logo
+   * após ler o QR o WhatsApp pede reinício (515) enquanto as credenciais novas ainda estão sendo
+   * gravadas, e a reabertura podia ler o arquivo antigo (pedindo QR de novo).
+   */
+  private auth: EncryptedAuthState | null = null;
+
+  private async getAuth(): Promise<EncryptedAuthState> {
+    this.auth ??= await openEncryptedAuthState(this.sessionPath, this.key);
+    return this.auth;
+  }
+
+  /** Apaga a sessão no disco e na memória (próxima conexão começa do zero, com QR). */
+  private async dropAuth() {
+    const auth = await this.getAuth();
+    await auth.clear();
+    this.auth = null;
+  }
 
   constructor(
     private readonly sessionPath: string,
@@ -45,7 +62,8 @@ export class BaileysProvider implements WhatsAppProvider {
   async start() {
     if (this.sock) return;
     this.closingManually = false;
-    const auth = await openEncryptedAuthState(this.sessionPath, this.key);
+    const auth = await this.getAuth();
+    await auth.flush(); // credenciais da conexão anterior gravadas antes de reconectar
 
     // Versão atual do WhatsApp Web; se a consulta falhar, usa a padrão da biblioteca.
     let version: [number, number, number] | undefined;
@@ -96,7 +114,7 @@ export class BaileysProvider implements WhatsAppProvider {
           : { kind: classifyDisconnect(code, !!auth.state.creds.registered || !!auth.state.creds.me), code, message: error?.message };
         this.closingManually = false;
         if (info.kind === "logged_out") {
-          auth.clear().catch((err) => this.logger.error({ err }, "falha ao apagar sessão após logout"));
+          this.dropAuth().catch((err) => this.logger.error({ err }, "falha ao apagar sessão após logout"));
         }
         this.emitter.emit("close", info);
       }
@@ -110,7 +128,6 @@ export class BaileysProvider implements WhatsAppProvider {
   }
 
   async logout() {
-    const auth = await openEncryptedAuthState(this.sessionPath, this.key);
     if (this.sock) {
       this.closingManually = true;
       try {
@@ -121,12 +138,11 @@ export class BaileysProvider implements WhatsAppProvider {
         await this.sock?.end(undefined).catch(() => {});
       }
     }
-    await auth.clear();
+    await this.dropAuth();
   }
 
   async clearSession() {
-    const auth = await openEncryptedAuthState(this.sessionPath, this.key);
-    await auth.clear();
+    await this.dropAuth();
   }
 
   async resolveRecipient(phone: string): Promise<string | null> {

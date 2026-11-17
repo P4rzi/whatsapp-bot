@@ -351,3 +351,20 @@ describe("provedor simulado (modo desenvolvimento)", () => {
     expect(dev.isConnected()).toBe(true);
   });
 });
+
+describe("batimento durante lotes longos", () => {
+  it("avisa progresso a cada cobrança processada", async () => {
+    const c = await createTestCustomer();
+    for (let i = 0; i < 3; i++) await createCharge(c.id, { amount: `${i + 1}.00` });
+    let ticks = 0;
+    await runSchedulerCycle(deps({ onProgress: async () => void ticks++ }));
+    expect(ticks).toBe(3);
+  });
+
+  it("falha ao registrar progresso não interrompe os envios", async () => {
+    const c = await createTestCustomer();
+    for (let i = 0; i < 2; i++) await createCharge(c.id, { amount: `${i + 1}.00` });
+    await runSchedulerCycle(deps({ onProgress: async () => { throw new Error("banco instável"); } }));
+    expect(provider.sent).toHaveLength(2);
+  });
+});

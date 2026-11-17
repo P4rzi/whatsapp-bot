@@ -13,6 +13,8 @@ export type SchedulerDeps = ProcessorDeps & {
   batchSize?: number;
   shouldStop?: () => boolean;
   sleep?: (ms: number) => Promise<void>;
+  /** Chamado após cada cobrança processada (o worker grava o batimento: um lote longo não parece travado). */
+  onProgress?: () => Promise<void>;
 };
 
 export type CycleResult = { processed: number; outcomes: Partial<Record<ProcessOutcome, number>>; skippedNoConnection: boolean };
@@ -49,6 +51,7 @@ export async function runSchedulerCycle(deps: SchedulerDeps): Promise<CycleResul
     const outcome = await processCharge(chargeId, deps);
     result.processed++;
     result.outcomes[outcome] = (result.outcomes[outcome] ?? 0) + 1;
+    await deps.onProgress?.().catch((err) => deps.logger.warn({ err }, "falha ao registrar progresso"));
     if (outcome === "released") break; // conexão caiu: espera o próximo ciclo
     // Intervalo entre envios consecutivos (ritmo humano, sem rajadas).
     if (outcome === "sent" || outcome === "unknown") await sleep(deps.minIntervalMs);

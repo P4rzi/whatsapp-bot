@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { Pagination } from "@/components/layout/pagination";
 import { CustomerStatus } from "@/components/customers/customer-status";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,9 +16,17 @@ export const metadata: Metadata = { title: "Clientes · Cobranças WhatsApp" };
 
 export default async function CustomersPage({ searchParams }: PageProps<"/clientes">) {
   await requireUser();
-  const { q } = await searchParams;
+  const { q, page: pageParam } = await searchParams;
   const search = typeof q === "string" ? q.slice(0, 100) : "";
-  const customers = await listCustomers(search);
+  const requested = Number(typeof pageParam === "string" ? pageParam : 1) || 1;
+  const { items: customers, total, page, pages } = await listCustomers(search, requested);
+  const href = (p: number) => {
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/clientes?${qs}` : "/clientes";
+  };
 
   return (
     <>
@@ -74,6 +83,7 @@ export default async function CustomersPage({ searchParams }: PageProps<"/client
           </TableBody>
         </Table>
       </Card>
+      <Pagination page={page} pages={pages} total={total} noun="clientes" href={href} />
     </>
   );
 }

@@ -63,6 +63,8 @@ export async function writeFileAtomic(filePath: string, data: Buffer) {
 export type EncryptedAuthState = {
   state: AuthenticationState;
   saveCreds: () => Promise<void>;
+  /** Espera todas as escritas em andamento chegarem ao disco. */
+  flush: () => Promise<void>;
   /** Apaga a sessão inteira (usado no logout). */
   clear: () => Promise<void>;
 };
@@ -86,15 +88,23 @@ export async function openEncryptedAuthState(folder: string, key: Buffer): Promi
     });
   }
 
+  // Escritas em andamento: flush() espera por elas (ex.: antes de reconectar logo após o QR).
+  const inFlight = new Set<Promise<unknown>>();
+  function track<T>(p: Promise<T>): Promise<T> {
+    inFlight.add(p);
+    p.finally(() => inFlight.delete(p)).catch(() => {});
+    return p;
+  }
+
   async function write(item: string, value: unknown) {
     const file = path.join(folder, fileNameFor(item));
     const data = encrypt(Buffer.from(JSON.stringify(value, BufferJSON.replacer), "utf8"), key);
-    await mutex.run(file, () => writeFileAtomic(file, data));
+    await track(mutex.run(file, () => writeFileAtomic(file, data)));
   }
 
   async function remove(item: string) {
     const file = path.join(folder, fileNameFor(item));
-    await mutex.run(file, () => unlink(file).catch(() => {}));
+    await track(mutex.run(file, () => unlink(file).catch(() => {})));
   }
 
   const creds: AuthenticationCreds = (await read<AuthenticationCreds>("creds")) ?? initAuthCreds();
@@ -133,7 +143,11 @@ export async function openEncryptedAuthState(folder: string, key: Buffer): Promi
       },
     },
     saveCreds: () => write("creds", creds),
+    flush: async () => {
+      while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
+    },
     clear: async () => {
+      while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
       for (const name of await readdir(folder)) {
         if (name.endsWith(EXT) || name.endsWith(".tmp")) await rm(path.join(folder, name), { force: true });
       }
