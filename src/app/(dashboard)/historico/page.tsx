@@ -88,9 +88,9 @@ export default async function HistoryPage({ searchParams }: PageProps<"/historic
                     <div className="text-xs text-muted-foreground tabular-nums">{formatPhone(ch.customer.phone)}</div>
                   </TableCell>
                   <TableCell className="max-w-64">
-                    <div className="line-clamp-2 whitespace-pre-wrap" title={message}>
+                    <Link href={`/cobrancas/${ch.id}`} className="line-clamp-2 whitespace-pre-wrap hover:underline" title={message}>
                       {message}
-                    </div>
+                    </Link>
                   </TableCell>
                   <TableCell className="tabular-nums">
                     {ch.sentAt ? formatInTz(ch.sentAt) : last ? formatInTz(last.attemptedAt) : "—"}

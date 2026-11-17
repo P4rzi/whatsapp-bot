@@ -8,8 +8,11 @@ Como usar e manter o sistema no dia a dia. Para instalação, veja [DEPLOY.md](D
    cliente realmente autorizou, e informe como (contrato, WhatsApp, verbal…). Sem isso nada é enviado.
 2. **Cobranças:** escolha o cliente, a descrição, o valor (opcional), a data e o horário (de Brasília)
    e confira a **prévia**: é exatamente o texto que será enviado.
-3. Na hora marcada, o serviço de envio manda a mensagem. Acompanhe em **Cobranças** e **Histórico**.
+3. Na hora marcada, o serviço de envio manda a mensagem. Acompanhe em **Cobranças** e **Histórico**; clicando na descrição de uma cobrança você vê o texto enviado e cada tentativa de envio, com horário e motivo de falha.
+   Para cobranças mensais, use **Repetir**: cria uma cópia para o mesmo dia do mês seguinte.
 4. Para mudar uma cobrança ainda não enviada, use **Editar**; para desistir dela, **Cancelar**.
+
+O tema do painel (claro, escuro ou igual ao sistema) é escolhido no ícone de sol/lua no topo.
 
 ## Status das cobranças
 

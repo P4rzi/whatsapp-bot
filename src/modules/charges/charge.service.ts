@@ -88,6 +88,17 @@ export async function createCharge(values: ChargeFormValues) {
   return prisma.charge.create({ data });
 }
 
+/** Cobrança com cliente e todas as tentativas (página de detalhe). */
+export function getChargeDetail(id: string) {
+  return prisma.charge.findUnique({
+    where: { id },
+    include: {
+      customer: { select: { id: true, name: true, phone: true } },
+      attempts: { orderBy: { attemptNumber: "asc" } },
+    },
+  });
+}
+
 export function getCharge(id: string) {
   return prisma.charge.findUnique({ where: { id }, include: { customer: { select: { id: true, name: true } } } });
 }

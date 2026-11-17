@@ -97,7 +97,11 @@ export default async function CustomerPage({ params }: PageProps<"/clientes/[id]
                 )}
                 {customer.charges.map((ch) => (
                   <TableRow key={ch.id}>
-                    <TableCell className="max-w-48 truncate pl-4">{ch.description}</TableCell>
+                    <TableCell className="max-w-48 truncate pl-4">
+                      <Link href={`/cobrancas/${ch.id}`} className="hover:underline">
+                        {ch.description}
+                      </Link>
+                    </TableCell>
                     <TableCell className="tabular-nums">{formatInTz(ch.scheduledAt)}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {ch.amount ? `R$ ${formatMoney(ch.amount.toString())}` : "—"}

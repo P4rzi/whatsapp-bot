@@ -104,7 +104,9 @@ export default async function ChargesPage({ searchParams }: PageProps<"/cobranca
                   <div className="text-xs text-muted-foreground tabular-nums">{formatPhone(ch.customer.phone)}</div>
                 </TableCell>
                 <TableCell className="max-w-56">
-                  <div className="truncate">{ch.description}</div>
+                  <Link href={`/cobrancas/${ch.id}`} className="block truncate hover:underline">
+                    {ch.description}
+                  </Link>
                   {ch.status === "FAILED" && ch.lastError && (
                     <div className="truncate text-xs text-destructive" title={ch.lastError}>
                       {ch.lastError}
