@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { AlertTriangle, CheckCircle2, Clock, Users, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Inbox, Users, XCircle, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,21 @@ export default async function DashboardPage() {
             As mensagens só saem quando os dois estiverem funcionando.
           </div>
         </div>
+      )}
+
+      {data.inbound.total > 0 && (
+        <Link
+          href={data.inbound.optOut > 0 ? "/respostas?filtro=parar" : "/respostas"}
+          className="mb-6 flex items-start gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-900 hover:bg-sky-500/15 dark:text-sky-100"
+        >
+          <Inbox className="mt-0.5 size-4 shrink-0" />
+          <div>
+            {data.inbound.total === 1 ? "1 resposta nova de cliente" : `${data.inbound.total} respostas novas de clientes`}
+            {data.inbound.optOut > 0 &&
+              ` — ${data.inbound.optOut === 1 ? "1 pede" : `${data.inbound.optOut} pedem`} para parar de receber mensagens`}
+            . Ver respostas →
+          </div>
+        </Link>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

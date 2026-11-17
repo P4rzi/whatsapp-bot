@@ -60,7 +60,7 @@ export async function runSchedulerCycle(deps: SchedulerDeps): Promise<CycleResul
   return result;
 }
 
-/** Retenção (LGPD): apaga tentativas antigas e comandos já processados. */
+/** Retenção (LGPD): apaga tentativas e respostas de clientes antigas e comandos já processados. */
 export async function runRetention(retentionDays: number, logger: Logger) {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60_000);
   const { count: attempts } = await prisma.messageAttempt.deleteMany({
@@ -69,5 +69,6 @@ export async function runRetention(retentionDays: number, logger: Logger) {
   const { count: commands } = await prisma.systemCommand.deleteMany({
     where: { status: { in: ["DONE", "FAILED"] }, createdAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60_000) } },
   });
-  if (attempts || commands) logger.info({ attempts, commands, retentionDays }, "retenção aplicada");
+  const { count: inbound } = await prisma.inboundMessage.deleteMany({ where: { receivedAt: { lt: cutoff } } });
+  if (attempts || commands || inbound) logger.info({ attempts, commands, inbound, retentionDays }, "retenção aplicada");
 }

@@ -15,13 +15,14 @@ Um repositório (monólito modular), dois processos:
 | Processo | Comando | Responsável por |
 |---|---|---|
 | Web | `npm run start:web` | Painel (Next.js), login, clientes, cobranças, histórico, configurações, QR Code |
-| Worker | `npm run start:worker` | Conexão WhatsApp, reconexão, fila de envio, tentativas, histórico, retenção |
+| Worker | `npm run start:worker` | Conexão WhatsApp, reconexão, fila de envio, tentativas, histórico, respostas dos clientes, retenção |
 
 Os dois se comunicam **só pelo PostgreSQL**:
 
 - `SystemCommand`: o painel pede conectar/desconectar/reconectar; o worker executa.
 - `WhatsAppConnection`: o worker publica o status e o QR Code temporário; o painel lê.
 - `Charge` + `MessageAttempt`: a fila de envio e o histórico.
+- `InboundMessage`: respostas dos clientes cadastrados, gravadas pelo worker e exibidas no painel (sem resposta automática).
 - `WorkerHeartbeat`: o worker registra cada ciclo; os health checks usam isso.
 
 A sessão do WhatsApp fica **criptografada** (AES-256-GCM) no volume do worker, nunca no banco.
@@ -30,9 +31,9 @@ A sessão do WhatsApp fica **criptografada** (AES-256-GCM) no volume do worker, 
 
 ```
 src/
-├── app/            páginas (login, dashboard, clientes, cobranças, histórico, whatsapp, configurações) e APIs
+├── app/            páginas (login, dashboard, clientes, cobranças, histórico, respostas, whatsapp, configurações) e APIs
 ├── components/     componentes de interface (shadcn/ui)
-├── modules/        regras de negócio por domínio (customers, charges, messaging, whatsapp, settings, ...)
+├── modules/        regras de negócio por domínio (customers, charges, messaging, inbound, whatsapp, settings, ...)
 ├── lib/            prisma, autenticação, env, logger, criptografia, utilitários (telefone, valor, fuso)
 └── worker/         processo de envio: index, scheduler, queue, processors/, whatsapp/ (Baileys, sessão, conexão)
 prisma/             schema e migrações

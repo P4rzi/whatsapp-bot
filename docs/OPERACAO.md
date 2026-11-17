@@ -12,6 +12,22 @@ Como usar e manter o sistema no dia a dia. Para instalação, veja [DEPLOY.md](D
    Para cobranças mensais, use **Repetir**: cria uma cópia para o mesmo dia do mês seguinte.
 4. Para mudar uma cobrança ainda não enviada, use **Editar**; para desistir dela, **Cancelar**.
 
+## Respostas dos clientes
+
+Quando um cliente cadastrado responde no WhatsApp de cobranças, a mensagem aparece em **Respostas**
+(e um aviso no Dashboard). O sistema **nunca responde sozinho**: responda pelo próprio celular.
+
+- **"Diz que pagou"**: mensagens como "já paguei", "fiz o pix", "segue o comprovante" ou um PDF.
+  Confira o pagamento e, se for o caso, cancele as próximas cobranças daquele cliente.
+- **"Pediu para parar"**: "sair", "parar", "não quero mais receber"… Nada muda sozinho. Se for mesmo
+  um pedido de descadastro, clique em **Descadastrar**: o cliente para de receber e as cobranças
+  agendadas para ele são canceladas.
+- Áudio, imagem e vídeo aparecem só como "Áudio — abra no WhatsApp para ver" (nada é baixado).
+- Mensagens de quem não é cliente, de grupos e de status são ignoradas e não ficam guardadas.
+- A classificação é automática por palavras e pode errar: leia a mensagem antes de agir.
+- Depois de ler, use **Marcar como vista** (ou "Marcar todas como vistas").
+- Só aparecem mensagens recebidas enquanto o WhatsApp está conectado no sistema.
+
 O tema do painel (claro, escuro ou igual ao sistema) é escolhido no ícone de sol/lua no topo.
 
 ## Status das cobranças
@@ -88,7 +104,7 @@ externo (UptimeRobot) manda e-mail. No Railway:
 - **Descadastro:** marque "Pediu para não receber mais". Bloqueia todos os envios imediatamente.
 - **Pedido de exclusão de dados:** exclua o cliente. Cliente, cobranças e histórico são apagados
   definitivamente (antes, cancele as cobranças agendadas).
-- **Retenção:** o histórico de tentativas é apagado automaticamente após 6 meses.
+- **Retenção:** o histórico de tentativas e as respostas dos clientes são apagados automaticamente após 6 meses.
 - **Logs:** não guardam senhas, credenciais do WhatsApp nem telefones completos.
 - **Backups** contêm dados pessoais: guarde as cópias externas em local seguro e apague as antigas.
 

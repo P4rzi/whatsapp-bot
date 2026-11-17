@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-const TABLES = ["MessageAttempt", "Charge", "Customer", "User", "SystemCommand", "WhatsAppConnection", "WorkerHeartbeat", "Settings"];
+const TABLES = ["InboundMessage", "MessageAttempt", "Charge", "Customer", "User", "SystemCommand", "WhatsAppConnection", "WorkerHeartbeat", "Settings"];
 
 /** Limpa todas as tabelas do schema de testes. Sempre qualificado com o schema "vitest". */
 export async function resetDb() {

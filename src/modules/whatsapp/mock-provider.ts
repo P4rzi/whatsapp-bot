@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { ProviderNotConnectedError, type DisconnectInfo, type ProviderEvents, type SendResult, type WhatsAppProvider } from "./provider";
+import { ProviderNotConnectedError, type DisconnectInfo, type IncomingMessage, type ProviderEvents, type SendResult, type WhatsAppProvider } from "./provider";
 
 // Provedor falso para testes automatizados: não conecta em nada, mas se comporta como o real.
 // Os testes controlam o que acontece (QR, conexão, queda, falha de envio).
@@ -103,6 +103,16 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
     this.session = true;
     this.connected = true;
     this.emitter.emit("open", { phoneNumber });
+  }
+  /** Simula uma mensagem recebida de um cliente. */
+  simulateIncoming(msg: Partial<IncomingMessage> & { phone: string }) {
+    this.emitter.emit("message", {
+      providerMessageId: `IN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: "TEXT",
+      text: null,
+      receivedAt: new Date(),
+      ...msg,
+    } satisfies IncomingMessage);
   }
   simulateClose(info: DisconnectInfo) {
     this.connected = false;

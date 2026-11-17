@@ -43,6 +43,7 @@ model Customer {
   updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
 
   charges Charge[]
+  inbound InboundMessage[]
 
   @@index([phone])
   @@index([name])
@@ -204,4 +205,47 @@ model Settings {
   id                     String   @id @default("default")
   defaultMessageTemplate String   @db.Text
   updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// ---------------------------------------------------------------------------
+// Respostas dos clientes (lidas pelo worker; o sistema nunca responde sozinho)
+// ---------------------------------------------------------------------------
+
+enum InboundKind {
+  TEXT
+  AUDIO
+  IMAGE
+  DOCUMENT
+  VIDEO
+  STICKER
+  OTHER
+}
+
+enum InboundIntent {
+  /// Pediu para parar de receber (só avisa no painel; nada muda sozinho).
+  OPT_OUT
+  /// Disse que já pagou / mandou comprovante.
+  PAYMENT_CLAIM
+  OTHER
+}
+
+model InboundMessage {
+  id                String        @id @default(uuid()) @db.Uuid
+  customerId        String        @db.Uuid
+  /// ID da mensagem no WhatsApp: evita registrar a mesma resposta duas vezes.
+  providerMessageId String        @unique
+  kind              InboundKind
+  /// Texto ou legenda (até 2000 caracteres).
+  text              String?       @db.Text
+  intent            InboundIntent
+  receivedAt        DateTime      @db.Timestamptz(3)
+  /// Quando o usuário marcou como vista no painel.
+  handledAt         DateTime?     @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([receivedAt])
+  @@index([handledAt, intent])
 }

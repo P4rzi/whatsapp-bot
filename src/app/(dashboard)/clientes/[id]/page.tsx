@@ -13,7 +13,9 @@ import { requireUser } from "@/lib/auth";
 import { formatInTz } from "@/lib/utils/datetime";
 import { formatMoney } from "@/lib/utils/money";
 import { formatPhone } from "@/lib/utils/phone";
+import { InboundText, IntentBadge } from "@/components/inbound/inbound-badges";
 import { getCustomer } from "@/modules/customers/customer.service";
+import { recentInboundForCustomer } from "@/modules/inbound/inbound.service";
 
 export const metadata: Metadata = { title: "Cliente · Cobranças WhatsApp" };
 
@@ -23,7 +25,7 @@ export default async function CustomerPage({ params }: PageProps<"/clientes/[id]
   await requireUser();
   const { id } = await params;
   if (!UUID_RE.test(id)) notFound();
-  const customer = await getCustomer(id);
+  const [customer, replies] = await Promise.all([getCustomer(id), recentInboundForCustomer(id, 10)]);
   if (!customer) notFound();
 
   return (
@@ -116,6 +118,30 @@ export default async function CustomerPage({ params }: PageProps<"/clientes/[id]
           </CardContent>
         </Card>
       </div>
+
+      {replies.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Respostas recentes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y text-sm">
+              {replies.map((m) => (
+                <li key={m.id} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div className="flex min-w-0 flex-col items-start gap-1">
+                    <IntentBadge intent={m.intent} />
+                    <InboundText kind={m.kind} text={m.text} />
+                  </div>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">{formatInTz(m.receivedAt)}</span>
+                </li>
+              ))}
+            </ul>
+            <Link href="/respostas?filtro=todas" className="mt-2 inline-block text-sm text-muted-foreground hover:underline">
+              Ver todas as respostas
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </>
   );
 }

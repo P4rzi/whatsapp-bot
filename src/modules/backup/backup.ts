@@ -17,6 +17,7 @@ export const TABLES = [
   "customer",
   "charge",
   "messageAttempt",
+  "inboundMessage",
   "whatsAppConnection",
   "systemCommand",
 ] as const;

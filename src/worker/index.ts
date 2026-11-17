@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { parseKey } from "@/lib/crypto";
 import { getWorkerEnv } from "@/lib/env";
-import { createLogger } from "@/lib/logger";
+import { createLogger, maskPhone } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { expireStaleCommands } from "@/modules/whatsapp/command.repository";
 import { prismaConnectionStore } from "@/modules/whatsapp/connection.repository";
 import { MockWhatsAppProvider } from "@/modules/whatsapp/mock-provider";
 import type { WhatsAppProvider } from "@/modules/whatsapp/provider";
+import { recordInbound } from "@/modules/inbound/inbound.service";
 import { processCommands } from "./commands";
 import { recoverStuckCharges } from "./queue";
 import { runRetention, runSchedulerCycle } from "./scheduler";
@@ -78,6 +79,14 @@ async function main() {
       ? new MockWhatsAppProvider({ autoScanAfterMs: 5_000 })
       : new BaileysProvider(sessionPath, parseKey(env.ENCRYPTION_KEY), logger);
   if (env.WHATSAPP_PROVIDER === "mock") logger.warn("MODO SIMULADO: nenhuma mensagem será enviada de verdade");
+  // Respostas dos clientes: só registra para o painel. Nunca responde sozinho.
+  provider.on("message", (msg) => {
+    recordInbound(msg)
+      .then(({ result, intent }) => {
+        if (result === "recorded") logger.info({ phone: maskPhone(msg.phone), kind: msg.kind, intent }, "resposta de cliente registrada");
+      })
+      .catch((err) => logger.error({ err }, "falha ao registrar resposta de cliente"));
+  });
   manager = new ConnectionManager(provider, prismaConnectionStore, logger);
   await manager.init();
 

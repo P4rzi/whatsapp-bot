@@ -9,6 +9,7 @@ import {
 import type { Logger } from "pino";
 import { ProviderNotConnectedError, type DisconnectInfo, type ProviderEvents, type SendResult, type WhatsAppProvider } from "@/modules/whatsapp/provider";
 import { classifyDisconnect } from "./events";
+import { parseIncoming, type RawMessage } from "./incoming";
 import { hasRegisteredSession, openEncryptedAuthState, type EncryptedAuthState } from "./session";
 
 // Implementação do WhatsAppProvider com Baileys (WhatsApp Web, não oficial).
@@ -93,6 +94,19 @@ export class BaileysProvider implements WhatsAppProvider {
 
     sock.ev.on("creds.update", () => {
       auth.saveCreds().catch((err) => this.logger.error({ err }, "falha ao salvar credenciais do WhatsApp"));
+    });
+
+    // Respostas dos clientes: só "notify" (mensagens novas), nunca o histórico sincronizado.
+    // O sistema apenas registra; não responde nem marca como lida (o celular continua mostrando).
+    sock.ev.on("messages.upsert", ({ messages, type }) => {
+      if (type !== "notify") return;
+      for (const m of messages) {
+        parseIncoming(m as RawMessage, (lid) => sock.signalRepository.lidMapping.getPNForLID(lid))
+          .then((parsed) => {
+            if (parsed) this.emitter.emit("message", parsed);
+          })
+          .catch((err) => this.logger.warn({ err }, "não foi possível ler uma mensagem recebida"));
+      }
     });
 
     sock.ev.on("connection.update", (update) => {

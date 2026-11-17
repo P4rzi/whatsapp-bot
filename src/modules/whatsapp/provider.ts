@@ -20,10 +20,21 @@ export type DisconnectKind =
 
 export type DisconnectInfo = { kind: DisconnectKind; code?: number; message?: string };
 
+/** Mensagem recebida de uma pessoa (conversa individual), já extraída do formato do provedor. */
+export type IncomingMessage = {
+  /** Telefone do remetente, só dígitos com DDI. */
+  phone: string;
+  providerMessageId: string;
+  kind: "TEXT" | "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO" | "STICKER" | "OTHER";
+  text: string | null;
+  receivedAt: Date;
+};
+
 export type ProviderEvents = {
   qr: (qr: string) => void;
   open: (info: { phoneNumber: string | null }) => void;
   close: (info: DisconnectInfo) => void;
+  message: (msg: IncomingMessage) => void;
 };
 
 export type SendResult = { providerMessageId: string | null };

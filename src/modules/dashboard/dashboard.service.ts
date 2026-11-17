@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { countUnhandledInbound } from "@/modules/inbound/inbound.service";
 
 /** Sem ciclo do worker há mais que isso = serviço de envio parado. */
 const WORKER_STALE_MS = 120_000;
 
 export async function getDashboardData() {
-  const [customers, byStatus, upcoming, connection, heartbeat] = await Promise.all([
+  const [customers, byStatus, upcoming, connection, heartbeat, inbound] = await Promise.all([
     prisma.customer.count(),
     prisma.charge.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.charge.findMany({
@@ -18,6 +19,7 @@ export async function getDashboardData() {
       select: { status: true, phoneNumber: true, lastConnectedAt: true },
     }),
     prisma.workerHeartbeat.findUnique({ where: { id: "worker" }, select: { lastCycleAt: true } }),
+    countUnhandledInbound(),
   ]);
 
   const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
@@ -31,5 +33,6 @@ export async function getDashboardData() {
     upcoming,
     whatsapp: connection ?? { status: "DISCONNECTED" as const, phoneNumber: null, lastConnectedAt: null },
     workerLastCycleAt: heartbeat?.lastCycleAt ?? null,
+    inbound,
   };
 }
