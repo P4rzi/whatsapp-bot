@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { NavLinks } from "@/components/layout/nav-links";
 import { UserMenu } from "@/components/layout/user-menu";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
@@ -21,7 +22,8 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-4 backdrop-blur">
           <MobileNav />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <ThemeToggle />
             <Suspense fallback={<Skeleton className="h-8 w-40" />}>
               <UserMenu />
             </Suspense>

@@ -7,7 +7,15 @@
 export function normalizePhone(input: string): string | null {
   let digits = input.replace(/\D/g, "");
   // Com "+" na frente, o número já traz o código do país.
-  const hasCountryCode = input.trim().startsWith("+");
+  let hasCountryCode = input.trim().startsWith("+");
+  if (!hasCountryCode && digits.startsWith("00")) {
+    // "00" = prefixo de discagem internacional (ex.: 0055 11 98765-4321).
+    digits = digits.slice(2);
+    hasCountryCode = true;
+  } else if (!hasCountryCode) {
+    // "0" antes do DDD (ex.: 011 98765-4321) é prefixo de longa distância, não faz parte do número.
+    digits = digits.replace(/^0+/, "");
+  }
   if (!hasCountryCode && (digits.length === 10 || digits.length === 11)) digits = `55${digits}`;
   if (digits.length < (hasCountryCode ? 8 : 12) || digits.length > 15) return null;
   // Brasil: DDI 55 + DDD (2) + número (8 ou 9 dígitos).

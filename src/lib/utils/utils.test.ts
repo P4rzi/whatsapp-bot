@@ -12,6 +12,12 @@ describe("normalizePhone", () => {
     expect(normalizePhone("+55 11 98765-4321")).toBe("5511987654321");
     expect(normalizePhone("+1 415 555 2671")).toBe("14155552671");
   });
+  it("ignora o 0 antes do DDD e entende o prefixo internacional 00", () => {
+    expect(normalizePhone("011 98765-4321")).toBe("5511987654321");
+    expect(normalizePhone("(011) 3456-7890")).toBe("551134567890");
+    expect(normalizePhone("0055 11 98765-4321")).toBe("5511987654321");
+    expect(normalizePhone("001 415 555 2671")).toBe("14155552671");
+  });
   it("rejeita números inválidos", () => {
     expect(normalizePhone("1234")).toBeNull();
     expect(normalizePhone("55119876543210")).toBeNull(); // 55 com 14 dígitos

@@ -100,9 +100,9 @@ export function ChargeForm({
           <NativeSelect id="customerId" aria-invalid={!!errors.customerId} {...form.register("customerId")}>
             <option value="">Selecione…</option>
             {customers.map((c) => (
-              <option key={c.id} value={c.id}>
+              <option key={c.id} value={c.id} disabled={!c.hasConsent && c.id !== values.customerId}>
                 {c.name} · {formatPhone(c.phone)}
-                {c.hasConsent ? "" : " (sem autorização)"}
+                {c.hasConsent ? "" : " (sem autorização: registre no cadastro do cliente)"}
               </option>
             ))}
           </NativeSelect>
